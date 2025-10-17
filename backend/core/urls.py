@@ -1,19 +1,26 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.http import JsonResponse
 
 
-def home(request):
+def api_root(request):
     return JsonResponse(
         {
             "message": "Drilling Log API",
-            "status": "working",
-            "endpoints": {"admin": "/admin/", "api": "/api/coming-soon/"},
+            "version": "1.0",
+            "endpoints": {
+                "admin": "/admin/",
+                "api": "/api/",
+                "wells": "/api/wells/",
+                "samples": "/api/samples/",
+                "reports": "/api/reports/",
+            },
         }
     )
 
 
 urlpatterns = [
-    path("", home),
+    path("", api_root),
     path("admin/", admin.site.urls),
+    path("api/", include("drilling_log.urls")),
 ]
