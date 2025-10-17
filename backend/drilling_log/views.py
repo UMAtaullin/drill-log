@@ -59,3 +59,36 @@ class DailyReportViewSet(viewsets.ModelViewSet):
         reports = self.get_queryset().filter(well_id=well_id)
         serializer = self.get_serializer(reports, many=True)
         return Response(serializer.data)
+
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def current_user(request):
+    """Получить информацию о текущем пользователе"""
+    return Response(
+        {
+            "id": request.user.id,
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "email": request.user.email,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_status(request):
+    """Статус API"""
+    return Response(
+        {
+            "status": "active",
+            "message": "Drilling Log API работает",
+            "user": request.user.username,
+        }
+    )
