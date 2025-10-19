@@ -3,29 +3,46 @@ from django.contrib.auth.models import User
 
 
 class Well(models.Model):
-    STATUS_CHOICES = (
-        ("planned", "Запланирована"),
-        ("drilling", "В процессе бурения"),
-        ("completed", "Завершена"),
-        ("abandoned", "Ликвидирована"),
+    """Данные перед бурением - заполняется один раз"""
+
+    DRILLING_METHODS = (
+        ("rotary", "Ротационное бурение"),
+        ("auger", "Шнековое бурение"),
+        ("percussion", "Ударно-канатное бурение"),
+        ("core", "Колонковое бурение"),
     )
 
+    # Основные данные
     name = models.CharField(
         max_length=100, unique=True, verbose_name="Название скважины"
     )
-    field = models.CharField(max_length=100, verbose_name="Месторождение")
-    location = models.CharField(max_length=200, verbose_name="Координаты")
+    area = models.CharField(max_length=100, verbose_name="Наименование участка")
+    structure = models.CharField(max_length=100, verbose_name="Наименование сооружения")
+
+    # Даты
+    start_date = models.DateField(verbose_name="Дата начала бурения")
+    end_date = models.DateField(verbose_name="Дата окончания бурения")
+
+    # Технические параметры
     planned_depth = models.DecimalField(
-        max_digits=8, decimal_places=2, verbose_name="Плановая глубина, м"
+        max_digits=6, decimal_places=2, verbose_name="Проектная глубина, м"
     )
-    status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="planned", verbose_name="Статус"
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, verbose_name="Широта"
     )
-    start_date = models.DateField(
-        null=True, blank=True, verbose_name="Дата начала бурения"
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, verbose_name="Долгота"
     )
+    drilling_method = models.CharField(
+        max_length=20, choices=DRILLING_METHODS, verbose_name="Способ бурения"
+    )
+    drilling_rig = models.CharField(max_length=100, verbose_name="Буровая установка")
+    vehicle = models.CharField(max_length=100, verbose_name="Транспортное средство")
+    diameter = models.CharField(max_length=50, verbose_name="Диаметр бурения, мм")
+
+    # Системные поля
     created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, verbose_name="Создал"
+        User, on_delete=models.CASCADE, verbose_name="Геолог"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -36,89 +53,50 @@ class Well(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.name} ({self.get_status_display()})"
+        return f"{self.name} ({self.area})"
 
 
-class LithologySample(models.Model):
-    """Литологическая проба - основная сущность для геолога"""
+class GeologyLayer(models.Model):
+    """Слои в процессе бурения - заполняется по мере бурения"""
 
-    ROCK_TYPES = (
-        ("clay", "Глина"),
+    LITHOLOGY_TYPES = (
         ("sand", "Песок"),
-        ("silt", "Алевролит"),
-        ("limestone", "Известняк"),
-        ("dolomite", "Доломит"),
-        ("sandstone", "Песчаник"),
-        ("shale", "Аргиллит"),
-        ("coal", "Уголь"),
-        ("conglomerate", "Конгломерат"),
-        ("breccia", "Брекчия"),
-        ("tuff", "Туф"),
-        ("other", "Другое"),
+        ("clay", "Глина"),
+        ("loam", "Суглинок"),
+        ("sandy_loam", "Супесь"),
+        ("peat", "Торф"),
+        ("gravel", "Гравий"),
+        ("boulder", "Валуны"),
+        ("fill", "Насыпной грунт"),
     )
 
     well = models.ForeignKey(
-        Well, on_delete=models.CASCADE, related_name="samples", verbose_name="Скважина"
+        Well, on_delete=models.CASCADE, related_name="layers", verbose_name="Скважина"
     )
+    layer_number = models.IntegerField(verbose_name="Номер слоя")
     depth_from = models.DecimalField(
         max_digits=6, decimal_places=2, verbose_name="Глубина от, м"
     )
     depth_to = models.DecimalField(
         max_digits=6, decimal_places=2, verbose_name="Глубина до, м"
     )
-    rock_type = models.CharField(
-        max_length=20, choices=ROCK_TYPES, verbose_name="Тип породы"
+    lithology = models.CharField(
+        max_length=20, choices=LITHOLOGY_TYPES, verbose_name="Литология"
     )
-    description = models.TextField(blank=True, verbose_name="Описание")
-    color = models.CharField(max_length=50, blank=True, verbose_name="Цвет")
-    hardness = models.CharField(max_length=50, blank=True, verbose_name="Твердость")
-    additional_notes = models.TextField(
-        blank=True, verbose_name="Дополнительные заметки"
-    )
-    collected_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, verbose_name="Геолог"
-    )
-    collected_at = models.DateTimeField(auto_now_add=True, verbose_name="Время отбора")
-
-    class Meta:
-        verbose_name = "Литологическая проба"
-        verbose_name_plural = "Литологические пробы"
-        ordering = ["well", "depth_from"]
-
-    def __str__(self):
-        return f"{self.well.name} - {self.depth_from}-{self.depth_to}м - {self.get_rock_type_display()}"
-
-
-class DailyReport(models.Model):
-    """Ежедневный отчет по бурению"""
-
-    well = models.ForeignKey(
-        Well,
-        on_delete=models.CASCADE,
-        related_name="daily_reports",
-        verbose_name="Скважина",
-    )
-    date = models.DateField(verbose_name="Дата")
-    drilled_meters = models.DecimalField(
-        max_digits=6, decimal_places=2, verbose_name="Пробурено за день, м"
-    )
-    current_depth = models.DecimalField(
-        max_digits=8, decimal_places=2, verbose_name="Текущая глубина, м"
-    )
-    drilling_time = models.DecimalField(
-        max_digits=4, decimal_places=1, default=0, verbose_name="Время бурения, часов"
-    )
-    remarks = models.TextField(blank=True, verbose_name="Примечания и наблюдения")
-    reported_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, verbose_name="Отчет составил"
-    )
+    description = models.TextField(verbose_name="Описание грунта")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Дневной отчет"
-        verbose_name_plural = "Дневные отчеты"
-        unique_together = ["well", "date"]
-        ordering = ["-date", "well"]
+        verbose_name = "Геологический слой"
+        verbose_name_plural = "Геологические слои"
+        ordering = ["well", "depth_from"]
+        unique_together = ["well", "layer_number"]
+
+    def thickness(self):
+        """Автоматический расчет мощности слоя"""
+        return self.depth_to - self.depth_from
+
+    thickness.short_description = "Мощность, м"
 
     def __str__(self):
-        return f"{self.well.name} - {self.date} - {self.drilled_meters}м"
+        return f"{self.well.name} - слой {self.layer_number} ({self.depth_from}-{self.depth_to}м)"

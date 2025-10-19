@@ -1,41 +1,72 @@
 from django.contrib import admin
-from .models import Well, LithologySample, DailyReport
+from .models import Well, GeologyLayer
+
+
+class GeologyLayerInline(admin.TabularInline):
+    """Слои прямо в форме скважины"""
+
+    model = GeologyLayer
+    extra = 1
+    readonly_fields = ("thickness",)
 
 
 @admin.register(Well)
 class WellAdmin(admin.ModelAdmin):
     list_display = (
         "name",
-        "field",
-        "status",
-        "planned_depth",
+        "area",
+        "structure",
         "start_date",
+        "planned_depth",
         "created_by",
     )
-    list_filter = ("status", "field", "start_date")
-    search_fields = ("name", "field", "location")
+    list_filter = ("area", "drilling_method", "start_date")
+    search_fields = ("name", "area", "structure")
     readonly_fields = ("created_at", "updated_at")
+    inlines = [GeologyLayerInline]
+
+    fieldsets = (
+        ("Основные данные", {"fields": ("name", "area", "structure")}),
+        ("Даты", {"fields": ("start_date", "end_date")}),
+        (
+            "Технические параметры",
+            {
+                "fields": (
+                    "planned_depth",
+                    "latitude",
+                    "longitude",
+                    "drilling_method",
+                    "drilling_rig",
+                    "vehicle",
+                    "diameter",
+                )
+            },
+        ),
+        (
+            "Системная информация",
+            {
+                "fields": ("created_by", "created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
 
 
-@admin.register(LithologySample)
-class LithologySampleAdmin(admin.ModelAdmin):
+@admin.register(GeologyLayer)
+class GeologyLayerAdmin(admin.ModelAdmin):
     list_display = (
         "well",
+        "layer_number",
         "depth_from",
         "depth_to",
-        "rock_type",
-        "collected_by",
-        "collected_at",
+        "lithology",
+        "thickness",
     )
-    list_filter = ("rock_type", "well", "collected_at")
+    list_filter = ("lithology", "well")
     search_fields = ("well__name", "description")
-    readonly_fields = ("collected_at",)
+    readonly_fields = ("thickness", "created_at")
 
+    def thickness(self, obj):
+        return obj.thickness()
 
-@admin.register(DailyReport)
-class DailyReportAdmin(admin.ModelAdmin):
-    list_display = ("well", "date", "drilled_meters", "current_depth", "reported_by")
-    list_filter = ("date", "well")
-    search_fields = ("well__name", "remarks")
-    readonly_fields = ("created_at",)
-    date_hierarchy = "date"
+    thickness.short_description = "Мощность, м"
