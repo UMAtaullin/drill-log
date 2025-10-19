@@ -9,6 +9,13 @@ class GeologyLayerInline(admin.TabularInline):
     extra = 1
     readonly_fields = ("thickness",)
 
+    def thickness(self, obj):
+        if obj.pk:  # Только для сохраненных объектов
+            return f"{obj.thickness()} м"
+        return "—"
+
+    thickness.short_description = "Мощность"
+
 
 @admin.register(Well)
 class WellAdmin(admin.ModelAdmin):
@@ -60,13 +67,13 @@ class GeologyLayerAdmin(admin.ModelAdmin):
         "depth_from",
         "depth_to",
         "lithology",
-        "thickness",
+        "thickness_display",
     )
     list_filter = ("lithology", "well")
     search_fields = ("well__name", "description")
-    readonly_fields = ("thickness", "created_at")
+    readonly_fields = ("thickness_display", "created_at")
 
-    def thickness(self, obj):
-        return obj.thickness()
+    def thickness_display(self, obj):
+        return f"{obj.thickness()} м"
 
-    thickness.short_description = "Мощность, м"
+    thickness_display.short_description = "Мощность"

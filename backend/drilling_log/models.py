@@ -94,7 +94,9 @@ class GeologyLayer(models.Model):
 
     def thickness(self):
         """Автоматический расчет мощности слоя"""
-        return self.depth_to - self.depth_from
+        if self.depth_from is not None and self.depth_to is not None:
+            return float(self.depth_to) - float(self.depth_from)
+        return 0.0
 
     thickness.short_description = "Мощность, м"
 

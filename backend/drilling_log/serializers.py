@@ -10,7 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class GeologyLayerSerializer(serializers.ModelSerializer):
-    thickness = serializers.ReadOnlyField()
+    thickness = serializers.SerializerMethodField()
     lithology_display = serializers.CharField(
         source="get_lithology_display", read_only=True
     )
@@ -18,7 +18,10 @@ class GeologyLayerSerializer(serializers.ModelSerializer):
     class Meta:
         model = GeologyLayer
         fields = "__all__"
-        read_only_fields = ("thickness", "created_at")
+        read_only_fields = ("created_at",)
+
+    def get_thickness(self, obj):
+        return obj.thickness()
 
 
 class WellSerializer(serializers.ModelSerializer):
