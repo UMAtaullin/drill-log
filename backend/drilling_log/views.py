@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.shortcuts import render
 from .models import Well, GeologyLayer
 from .serializers import WellSerializer, GeologyLayerSerializer
 
@@ -15,6 +16,7 @@ class WellViewSet(viewsets.ModelViewSet):
 
 
 class GeologyLayerViewSet(viewsets.ModelViewSet):
+    queryset = GeologyLayer.objects.all()
     serializer_class = GeologyLayerSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -29,3 +31,9 @@ class GeologyLayerViewSet(viewsets.ModelViewSet):
         )
         next_number = (last_layer.layer_number + 1) if last_layer else 1
         serializer.save(layer_number=next_number)
+
+
+# View для PWA
+def pwa_app(request):
+    """Главная страница PWA"""
+    return render(request, "index.html")

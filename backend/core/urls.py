@@ -1,26 +1,17 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.http import JsonResponse
-
-
-def api_root(request):
-    return JsonResponse(
-        {
-            "message": "Drilling Log API",
-            "version": "1.0",
-            "endpoints": {
-                "admin": "/admin/",
-                "api": "/api/",
-                "wells": "/api/wells/",
-                "samples": "/api/samples/",
-                "reports": "/api/reports/",
-            },
-        }
-    )
-
+from django.views.generic import TemplateView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
-    path("", api_root),
     path("admin/", admin.site.urls),
     path("api/", include("drilling_log.urls")),
+    path("", TemplateView.as_view(template_name="index.html"), name="pwa"),
 ]
+
+# Обслуживание статики в разработке
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0]
+    )
