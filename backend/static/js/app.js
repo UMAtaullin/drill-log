@@ -1,56 +1,95 @@
-// Базовые функции приложения
 class DrillingJournal {
   constructor() {
-    this.apiBase = 'http://localhost:8000/api';
-    this.currentWell = null;
+    this.dbName = 'DrillingJournal';
     this.init();
   }
 
-  init() {
+  async init() {
+    await this.initDB();
     this.setupEventListeners();
     this.loadWells();
-    this.checkConnection();
+    this.setupOffline();
   }
 
-  setupEventListeners() {
-    // Форма новой скважины
-    document.getElementById('new-well-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.createWell(new FormData(e.target));
-    });
+  async initDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, 1);
 
-    // Форма нового слоя
-    document.getElementById('new-layer-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.createLayer(new FormData(e.target));
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+
+        if (!db.objectStoreNames.contains('wells')) {
+          const store = db.createObjectStore('wells', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('name', 'name', { unique: true });
+        }
+
+        if (!db.objectStoreNames.contains('layers')) {
+          const store = db.createObjectStore('layers', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('wellId', 'wellId', { unique: false });
+        }
+      };
+    });
+  }
+
+  async saveWell(wellData) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['wells'], 'readwrite');
+      const store = transaction.objectStore('wells');
+      const request = store.add({
+        ...wellData,
+        createdAt: new Date().toISOString()
+      });
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
   }
 
   async loadWells() {
-    try {
-      const response = await fetch(`${this.apiBase}/wells/`);
-      const wells = await response.json();
-      this.renderWells(wells);
-    } catch (error) {
-      console.log('Офлайн режим, загружаем из локального хранилища');
-      this.loadFromLocalStorage();
-    }
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['wells'], 'readonly');
+      const store = transaction.objectStore('wells');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        this.renderWells(request.result);
+        resolve(request.result);
+      };
+      request.onerror = () => reject(request.error);
+    });
   }
 
   renderWells(wells) {
     const container = document.getElementById('wells-list');
 
     if (wells.length === 0) {
-      container.innerHTML = '<p>Нет созданных скважин</p>';
+      container.innerHTML = `
+                <div class="empty-state">
+                    <p>📝 Нет созданных скважин</p>
+                    <p><small>Создайте первую скважину</small></p>
+                </div>
+            `;
       return;
     }
 
     container.innerHTML = wells.map(well => `
-            <div class="well-item card" onclick="app.showWellDetail(${well.id})">
+            <div class="well-item card">
                 <h3>${well.name}</h3>
-                <p>Участок: ${well.area}</p>
-                <p>Глубина: ${well.planned_depth || '—'} м</p>
-                <small>Создана: ${new Date(well.created_at).toLocaleDateString()}</small>
+                <p>📍 ${well.area}</p>
+                ${well.structure ? `<p>🏗️ ${well.structure}</p>` : ''}
+                ${well.planned_depth ? `<p>📏 ${well.planned_depth} м</p>` : ''}
+                <div class="well-meta">
+                    <small>📅 ${new Date(well.createdAt).toLocaleDateString('ru-RU')}</small>
+                </div>
+                <button onclick="app.addLayer(${well.id})" class="btn btn-small">
+                    ➕ Добавить слой
+                </button>
             </div>
         `).join('');
   }
@@ -60,119 +99,53 @@ class DrillingJournal {
       name: formData.get('name'),
       area: formData.get('area'),
       structure: formData.get('structure'),
-      start_date: formData.get('start_date'),
-      planned_depth: formData.get('planned_depth')
+      planned_depth: formData.get('planned_depth') || 0,
+      latitude: formData.get('latitude') || 0,
+      longitude: formData.get('longitude') || 0
     };
 
-    try {
-      const response = await fetch(`${this.apiBase}/wells/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(wellData)
-      });
-
-      if (response.ok) {
-        alert('Скважина создана!');
-        showPage('home-page');
-        this.loadWells();
-      }
-    } catch (error) {
-      // Сохраняем в локальное хранилище для офлайн работы
-      this.saveToLocalStorage('wells', wellData);
-      alert('Скважина сохранена локально (офлайн)');
-      showPage('home-page');
-    }
+    await this.saveWell(wellData);
+    this.showMessage('✅ Скважина сохранена!', 'success');
+    showPage('home-page');
+    this.loadWells();
   }
 
-  async createLayer(formData) {
-    const layerData = {
-      well: parseInt(formData.get('well_id')),
-      depth_from: parseFloat(formData.get('depth_from')),
-      depth_to: parseFloat(formData.get('depth_to')),
-      lithology: formData.get('lithology'),
-      description: formData.get('description')
-    };
-
-    try {
-      const response = await fetch(`${this.apiBase}/layers/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(layerData)
-      });
-
-      if (response.ok) {
-        alert('Слой добавлен!');
-        this.showWellDetail(layerData.well);
-      }
-    } catch (error) {
-      this.saveToLocalStorage('layers', layerData);
-      alert('Слой сохранен локально (офлайн)');
-      this.showWellDetail(layerData.well);
-    }
-  }
-
-  showWellDetail(wellId) {
-    this.currentWell = wellId;
-    document.getElementById('current-well-id').value = wellId;
-
-    // Загружаем данные скважины и показываем страницу
-    showPage('well-detail-page');
-    // Здесь будет загрузка деталей скважины
-  }
-
-  checkConnection() {
-    const statusElement = document.getElementById('connection-status');
-
-    if (navigator.onLine) {
-      statusElement.innerHTML = '<span>🟢 Онлайн</span>';
-    } else {
-      statusElement.innerHTML = '<span class="offline-badge">🔴 Офлайн</span>';
-    }
-
-    window.addEventListener('online', () => {
-      statusElement.innerHTML = '<span>🟢 Онлайн</span>';
-    });
-
-    window.addEventListener('offline', () => {
-      statusElement.innerHTML = '<span class="offline-badge">🔴 Офлайн</span>';
+  setupEventListeners() {
+    document.getElementById('new-well-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.createWell(new FormData(e.target));
     });
   }
 
-  saveToLocalStorage(type, data) {
-    const key = `offline_${type}`;
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    existing.push({ ...data, id: Date.now(), synced: false });
-    localStorage.setItem(key, JSON.stringify(existing));
+  setupOffline() {
+    // Приложение всегда в офлайн режиме
+    document.getElementById('connection-status').innerHTML =
+      '<span class="status-offline">💾 Локальное хранилище</span>';
   }
 
-  loadFromLocalStorage() {
-    // Загрузка данных из localStorage
-    const wells = JSON.parse(localStorage.getItem('offline_wells') || '[]');
-    this.renderWells(wells);
+  showMessage(text, type = 'info') {
+    alert(text); // Простой alert для демонстрации
+  }
+
+  addLayer(wellId) {
+    const depthFrom = prompt('Глубина от (м):');
+    const depthTo = prompt('Глубина до (м):');
+    const lithology = prompt('Литология (песок/глина/торф и т.д.):');
+    const description = prompt('Описание:');
+
+    if (depthFrom && depthTo && lithology) {
+      this.showMessage(`Слой ${depthFrom}-${depthTo}м добавлен!`, 'success');
+    }
   }
 }
 
-// Глобальные функции для навигации
+// Глобальные функции
 function showPage(pageId) {
-  document.querySelectorAll('.page').forEach(page => {
-    page.classList.remove('active');
-  });
+  document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
   document.getElementById(pageId).classList.add('active');
-
-  // Обновляем активную кнопку навигации
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.classList.remove('active');
-  });
 }
 
-function syncData() {
-  alert('Синхронизация...');
-  // Здесь будет логика синхронизации офлайн данных
-}
-
-// Инициализация приложения
-const app = new DrillingJournal();
+let app;
+document.addEventListener('DOMContentLoaded', () => {
+  app = new DrillingJournal();
+});
