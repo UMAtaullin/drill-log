@@ -2,7 +2,7 @@ import os
 import sys
 
 # Добавляем путь к проекту
-path = "/home/uma/drill-log/backend"  # замените uma на ваш username
+path = "/home/Ural207/drill-log/backend"  
 if path not in sys.path:
     sys.path.append(path)
 
