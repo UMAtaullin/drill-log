@@ -119,10 +119,15 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Добавляем STATIC_ROOT
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"  # Папка для collectstatic
+
+# STATICFILES_DIRS для разработки
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
+    BASE_DIR / "static",  # Ваши статические файлы
 ]
+
 
 # Для PWA
 CORS_ALLOWED_ORIGINS = [
