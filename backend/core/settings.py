@@ -5,9 +5,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-er!n7baj$6%*i2l+gqu9sid1p)lvp4kubvh!1p=#=mo83-x+tc'
 
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ['Ural207.pythonanywhere.com']
 
 
 INSTALLED_APPS = [
@@ -130,11 +130,9 @@ STATICFILES_DIRS = [
 
 
 # Для PWA
+# Настройки для PWA
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
+    "https://Ural207.pythonanywhere.com",
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
