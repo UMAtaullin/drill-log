@@ -5,76 +5,127 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Буровой Журнал</title>
     <meta name="theme-color" content="#4f46e5">
+    <link rel="manifest" href="/static/manifest.json">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f8fafc; 
-            padding: 20px;
+        /* Существующие стили оставляем, добавляем новые */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
         }
-        .container { max-width: 400px; margin: 0 auto; }
-        .header { 
-            background: #4f46e5; 
-            color: white; 
-            padding: 20px; 
-            text-align: center; 
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .btn {
-            background: #4f46e5;
+        
+        .message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #10b981;
             color: white;
-            border: none;
-            padding: 15px;
+            padding: 12px 20px;
             border-radius: 8px;
-            font-size: 16px;
-            width: 100%;
-            margin: 10px 0;
-            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 10px 0;
+        
+        .message-error {
+            background: #ef4444;
+        }
+        
+        .message-info {
+            background: #3b82f6;
         }
     </style>
 </head>
 <body>
+    <div class="header">
+        <h1>📋 Буровой Журнал</h1>
+        <div id="connection-status" class="status-online">🟢 Онлайн</div>
+    </div>
+
     <div class="container">
-        <div class="header">
-            <h1>📋 Буровой Журнал</h1>
-            <p>Электронный журнал для геологов</p>
+        <!-- Главная страница -->
+        <div id="home-page" class="page active">
+            <div class="card">
+                <h2>Мои скважины</h2>
+                <div id="wells-list">
+                    <div class="empty-state">
+                        <p>📝 Загрузка скважин...</p>
+                    </div>
+                </div>
+                <button class="btn" onclick="showPage('new-well-page')">
+                    ➕ Новая скважина
+                </button>
+            </div>
+            
+            <!-- Статус офлайн данных -->
+            <div class="card" id="offline-data" style="display: none;">
+                <h3>💾 Локальные данные</h3>
+                <p>Эти данные сохранены на устройстве:</p>
+                <div id="offline-wells-list"></div>
+                <button class="btn" onclick="app.syncOfflineData()">
+                    🔄 Синхронизировать при подключении
+                </button>
+            </div>
         </div>
-        
-        <div class="card">
-            <h2>Добро пожаловать!</h2>
-            <p>Приложение для ведения бурового журнала в полевых условиях.</p>
-            
-            <button class="btn" onclick="showMessage()">
-                Начать работу
-            </button>
-            
-            <div style="margin-top: 20px;">
-                <h3>Быстрые ссылки:</h3>
-                <a href="/admin/" style="color: #4f46e5; display: block; margin: 5px 0;">Админка</a>
-                <a href="/api/wells/" style="color: #4f46e5; display: block; margin: 5px 0;">API Скважин</a>
+
+        <!-- Форма создания скважины (уже у вас есть) -->
+        <div id="new-well-page" class="page">
+            <div class="card">
+                <h2>Новая скважина</h2>
+                <form id="new-well-form">
+                    <div class="form-group">
+                        <label>Название скважины *</label>
+                        <input type="text" name="name" required placeholder="Скважина №1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Участок *</label>
+                        <input type="text" name="area" required placeholder="Северный участок">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Сооружение</label>
+                        <input type="text" name="structure" placeholder="Жилой дом">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Проектная глубина (м)</label>
+                        <input type="number" step="0.01" name="planned_depth" placeholder="10.0">
+                    </div>
+                    
+                    <button type="submit" class="btn">💾 Сохранить скважину</button>
+                </form>
+                <button class="btn btn-secondary" onclick="showPage('home-page')">
+                    ← Назад
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- Навигация -->
+    <div class="nav">
+        <button class="nav-btn active" onclick="showPage('home-page')">🏠</button>
+        <button class="nav-btn" onclick="showPage('new-well-page')">➕</button>
+        <button class="nav-btn" onclick="app.syncData()">🔄</button>
+        <button class="nav-btn" onclick="app.exportData()">📤</button>
+    </div>
+
+    <script src="/static/js/app.js"></script>
     <script>
-        function showMessage() {
-            alert('Приложение готово к работе!');
+        // Регистрируем Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/js/sw.js')
+                .then(() => console.log('Service Worker зарегистрирован'))
+                .catch(error => console.log('Ошибка Service Worker:', error));
         }
         
-        // Проверка соединения
-        if (navigator.onLine) {
-            console.log('Онлайн режим');
-        } else {
-            console.log('Офлайн режим');
-        }
+        // Проверяем соединение при загрузке
+        window.addEventListener('load', () => {
+            if (!navigator.onLine) {
+                document.getElementById('connection-status').innerHTML = 
+                    '<span class="status-offline">🔴 Офлайн - работаем локально</span>';
+            }
+        });
     </script>
 </body>
 </html>

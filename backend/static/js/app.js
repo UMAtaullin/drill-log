@@ -137,6 +137,48 @@ class DrillingJournal {
       this.showMessage(`Слой ${depthFrom}-${depthTo}м добавлен!`, 'success');
     }
   }
+  async registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.register('/static/js/sw.js');
+        console.log('Service Worker зарегистрирован:', registration);
+
+        // Проверяем обновления Service Worker
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          console.log('Новая версия Service Worker:', newWorker);
+        });
+      } catch (error) {
+        console.log('Ошибка регистрации Service Worker:', error);
+      }
+    }
+  }
+
+  // Добавляем в init()
+  async init() {
+    await this.initDB();
+    await this.registerServiceWorker();  // ← Добавляем эту строку
+    this.setupEventListeners();
+    this.loadWells();
+    this.checkConnection();
+  }
+
+  // Показываем офлайн данные
+  async showOfflineData() {
+    const offlineWells = await this.loadFromLocalDB('wells');
+    const offlineElement = document.getElementById('offline-data');
+    const offlineList = document.getElementById('offline-wells-list');
+
+    if (offlineWells.length > 0) {
+      offlineElement.style.display = 'block';
+      offlineList.innerHTML = offlineWells.map(well => `
+            <div class="well-item">
+                <strong>${well.name}</strong> - ${well.area}
+                ${!well.synced ? ' (не синхронизировано)' : ''}
+            </div>
+        `).join('');
+    }
+  }
 }
 
 // Глобальные функции
