@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 5;  // Увеличиваем версию
+    this.dbVersion = 5;
     this.apiBase = '/api';
     this.currentWell = null;
     this.init();
@@ -54,7 +54,7 @@ class DrillingJournal {
         localSaveTime: new Date().toISOString()
       };
 
-      console.log(`💾 Сохранение в ${storeName}:`, itemWithId);
+      console.log(`💾 Сохранение в ${storeName}:`, itemWithId.name || itemWithId.id);
       const request = store.put(itemWithId);
 
       request.onsuccess = () => resolve(itemWithId);
@@ -80,6 +80,16 @@ class DrillingJournal {
   }
 
   async loadWells() {
+    // ЕСЛИ ОФЛАЙН - СРАЗУ ГРУЗИМ ИЗ ЛОКАЛЬНОЙ БД
+    if (!navigator.onLine) {
+      console.log('📴 Офлайн режим - загружаем скважины из локальной БД');
+      const localWells = await this.loadFromLocalDB('wells');
+      console.log('📂 Найдено локальных скважин:', localWells.length);
+      this.renderWells(localWells);
+      return;
+    }
+
+    // ЕСЛИ ОНЛАЙН - пробуем загрузить с сервера
     try {
       const response = await fetch(`${this.apiBase}/wells/`);
       if (!response.ok) throw new Error('HTTP error');
@@ -93,9 +103,8 @@ class DrillingJournal {
 
       this.renderWells(wells);
     } catch (error) {
-      console.log('📴 Офлайн режим, загружаем из локальной БД');
+      console.log('❌ Ошибка загрузки скважин, используем локальные данные');
       const localWells = await this.loadFromLocalDB('wells');
-      console.log('📂 Найдено локальных скважин:', localWells.length);
       this.renderWells(localWells);
     }
   }
@@ -108,36 +117,43 @@ class DrillingJournal {
       planned_depth: parseFloat(formData.get('planned_depth')) || 0
     };
 
-    try {
-      const response = await fetch(`${this.apiBase}/wells/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(wellData)
-      });
+    // ПРОВЕРЯЕМ ОНЛАЙН СТАТУС
+    if (navigator.onLine) {
+      try {
+        const response = await fetch(`${this.apiBase}/wells/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(wellData)
+        });
 
-      if (response.ok) {
-        const savedWell = await response.json();
-        await this.saveToLocalDB('wells', savedWell);
-        this.showMessage('✅ Скважина создана!', 'success');
-        showPage('home-page');
-        this.loadWells();
+        if (response.ok) {
+          const savedWell = await response.json();
+          await this.saveToLocalDB('wells', savedWell);
+          this.showMessage('✅ Скважина создана!', 'success');
+          showPage('home-page');
+          this.loadWells();
+          return;
+        }
+      } catch (error) {
+        console.log('❌ Ошибка при онлайн создании, сохраняем локально');
       }
-    } catch (error) {
-      console.log('📴 Офлайн режим, сохраняем локально');
-      const localWell = await this.saveToLocalDB('wells', {
-        ...wellData,
-        id: `local_well_${Date.now()}`,
-        created_at: new Date().toISOString(),
-        created_by: { username: 'local_user' },
-        synced: false
-      });
-
-      this.showMessage('💾 Скважина сохранена локально', 'info');
-      showPage('home-page');
-      this.loadWells();
     }
+
+    // ОФЛАЙН РЕЖИМ ИЛИ ОШИБКА ОНЛАЙН
+    console.log('📴 Сохраняем скважину локально');
+    const localWell = await this.saveToLocalDB('wells', {
+      ...wellData,
+      id: `local_well_${Date.now()}`,
+      created_at: new Date().toISOString(),
+      created_by: { username: 'local_user' },
+      synced: false
+    });
+
+    this.showMessage('💾 Скважина сохранена локально', 'info');
+    showPage('home-page');
+    this.loadWells();
   }
 
   async createLayer(formData) {
@@ -147,7 +163,7 @@ class DrillingJournal {
 
     const layerData = {
       well: wellId,
-      wellId: wellId, // ДЛЯ ЛОКАЛЬНОГО ПОИСКА
+      wellId: wellId,
       depth_from: depthFrom,
       depth_to: depthTo,
       lithology: formData.get('lithology'),
@@ -156,47 +172,78 @@ class DrillingJournal {
       thickness: (depthTo - depthFrom).toFixed(2)
     };
 
-    try {
-      const response = await fetch(`${this.apiBase}/layers/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(layerData)
-      });
-
-      if (response.ok) {
-        const savedLayer = await response.json();
-        await this.saveToLocalDB('layers', {
-          ...savedLayer,
-          wellId: wellId // ДЛЯ ЛОКАЛЬНОГО ПОИСКА
+    // ПРОВЕРЯЕМ ОНЛАЙН СТАТУС
+    if (navigator.onLine) {
+      console.log('🌐 Онлайн режим - отправляем на сервер');
+      try {
+        const response = await fetch(`${this.apiBase}/layers/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(layerData)
         });
-        this.showMessage('✅ Слой добавлен!', 'success');
-        document.getElementById('new-layer-form').reset();
-        await this.loadWellLayers(wellId);
+
+        if (response.ok) {
+          const savedLayer = await response.json();
+          await this.saveToLocalDB('layers', {
+            ...savedLayer,
+            wellId: wellId
+          });
+          this.showMessage('✅ Слой добавлен!', 'success');
+          document.getElementById('new-layer-form').reset();
+          await this.loadWellLayers(wellId);
+          return;
+        }
+      } catch (error) {
+        console.log('❌ Ошибка при онлайн отправке, сохраняем локально');
       }
-    } catch (error) {
-      console.log('📴 Офлайн режим, сохраняем слой локально');
-
-      const localLayer = await this.saveToLocalDB('layers', {
-        ...layerData,
-        id: `local_layer_${Date.now()}`,
-        created_at: new Date().toISOString(),
-        synced: false
-      });
-
-      console.log('💾 Локальный слой сохранен:', localLayer);
-      this.showMessage('💾 Слой сохранен локально', 'info');
-      document.getElementById('new-layer-form').reset();
-
-      // ЗАГРУЖАЕМ СЛОИ ТОЛЬКО ИЗ ЛОКАЛЬНОЙ БД
-      await this.loadWellLayersFromLocal(wellId);
     }
+
+    // ОФЛАЙН РЕЖИМ ИЛИ ОШИБКА ОНЛАЙН
+    console.log('📴 Сохраняем слой локально');
+    await this.saveLayerOffline(layerData, wellId);
+  }
+
+  async saveLayerOffline(layerData, wellId) {
+    const localLayer = await this.saveToLocalDB('layers', {
+      ...layerData,
+      id: `local_layer_${Date.now()}`,
+      created_at: new Date().toISOString(),
+      synced: false
+    });
+
+    console.log('💾 Локальный слой сохранен:', localLayer);
+    this.showMessage('💾 Слой сохранен локально', 'info');
+    document.getElementById('new-layer-form').reset();
+
+    // ОБНОВЛЯЕМ ИНТЕРФЕЙС БЕЗ ЗАПРОСА К СЕРВЕРУ
+    await this.updateLayersUI(wellId);
+  }
+
+  async updateLayersUI(wellId) {
+    console.log('🔄 Обновление интерфейса для скважины:', wellId);
+
+    const allLayers = await this.loadFromLocalDB('layers');
+    const wellLayers = allLayers.filter(layer => {
+      return layer.well === wellId || layer.wellId === wellId;
+    });
+
+    console.log(`🎯 Отображаем ${wellLayers.length} слоев`);
+    this.renderLayers(wellLayers);
   }
 
   async loadWellLayers(wellId) {
     console.log('🔄 Загрузка слоев для скважины:', wellId);
 
+    // ЕСЛИ ОФЛАЙН - СРАЗУ ГРУЗИМ ИЗ ЛОКАЛЬНОЙ БД
+    if (!navigator.onLine) {
+      console.log('📴 Офлайн режим - загружаем только из локальной БД');
+      await this.updateLayersUI(wellId);
+      return;
+    }
+
+    // ЕСЛИ ОНЛАЙН - пробуем загрузить с сервера
     try {
       const response = await fetch(`${this.apiBase}/layers/?well_id=${wellId}`);
       if (!response.ok) throw new Error('HTTP error');
@@ -214,19 +261,9 @@ class DrillingJournal {
       this.renderLayers(layers);
 
     } catch (error) {
-      console.log('📴 Офлайн режим, загружаем слои из локальной БД');
-      await this.loadWellLayersFromLocal(wellId);
+      console.log('❌ Ошибка загрузки с сервера, используем локальные данные');
+      await this.updateLayersUI(wellId);
     }
-  }
-
-  async loadWellLayersFromLocal(wellId) {
-    const allLayers = await this.loadFromLocalDB('layers');
-    const wellLayers = allLayers.filter(layer => {
-      return layer.well === wellId || layer.wellId === wellId;
-    });
-
-    console.log(`🎯 Найдено ${wellLayers.length} локальных слоев для скважины ${wellId}`);
-    this.renderLayers(wellLayers);
   }
 
   // Остальные методы без изменений
