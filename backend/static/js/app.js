@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 2;  // Увеличиваем версию для обновления структуры
+    this.dbVersion = 4;  // Увеличиваем версию
     this.apiBase = '/api';
     this.currentWell = null;
     this.init();
@@ -21,6 +21,7 @@ class DrillingJournal {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
+        console.log('БД инициализирована, хранилища:', Array.from(this.db.objectStoreNames));
         resolve();
       };
 
@@ -28,69 +29,63 @@ class DrillingJournal {
         const db = event.target.result;
         console.log('Обновление БД до версии:', event.newVersion);
 
-        // Удаляем старые хранилища если есть
-        if (db.objectStoreNames.contains('wells')) {
-          db.deleteObjectStore('wells');
-        }
-        if (db.objectStoreNames.contains('layers')) {
-          db.deleteObjectStore('layers');
+        // Создаем хранилища если их нет
+        if (!db.objectStoreNames.contains('wells')) {
+          const wellStore = db.createObjectStore('wells', { keyPath: 'id' });
+          wellStore.createIndex('name', 'name', { unique: false }); // Без уникальности
         }
 
-        // Создаем новые хранилища
-        const wellStore = db.createObjectStore('wells', { keyPath: 'id' });
-        wellStore.createIndex('name', 'name', { unique: false });
-
-        const layerStore = db.createObjectStore('layers', { keyPath: 'id' });
-        layerStore.createIndex('wellId', 'wellId', { unique: false });
-
-        console.log('Созданы хранилища:', Array.from(db.objectStoreNames));
+        if (!db.objectStoreNames.contains('layers')) {
+          const layerStore = db.createObjectStore('layers', { keyPath: 'id' });
+          layerStore.createIndex('wellId', 'wellId', { unique: false });
+        }
       };
     });
   }
 
-  // СОХРАНЕНИЕ В ЛОКАЛЬНУЮ БД
   async saveToLocalDB(storeName, data) {
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
 
-      // Генерируем ID если его нет
+      // Создаем объект с гарантированным ID
       const itemWithId = {
         ...data,
-        id: data.id || `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: data.id || `local_${Date.now()}`,
         synced: false,
         localSaveTime: new Date().toISOString()
       };
 
+      console.log(`Сохранение в ${storeName}:`, itemWithId);
       const request = store.put(itemWithId);
 
-      request.onsuccess = () => {
-        console.log(`Сохранено в ${storeName}:`, itemWithId);
-        resolve(itemWithId);
+      request.onsuccess = () => resolve(itemWithId);
+      request.onerror = (e) => {
+        console.error(`Ошибка сохранения в ${storeName}:`, e);
+        reject(e);
       };
-      request.onerror = () => reject(request.error);
     });
   }
 
-  // ЗАГРУЗКА ИЗ ЛОКАЛЬНОЙ БД
   async loadFromLocalDB(storeName) {
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([storeName], 'readonly');
       const store = transaction.objectStore(storeName);
       const request = store.getAll();
 
-      request.onsuccess = () => {
-        console.log(`Загружено из ${storeName}:`, request.result.length, 'записей');
-        resolve(request.result);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => {
+        console.error(`Ошибка загрузки из ${storeName}:`, e);
+        reject(e);
       };
-      request.onerror = () => reject(request.error);
     });
   }
 
-  // ЗАГРУЗКА СКВАЖИН (ОНЛАЙН + ОФФЛАЙН)
   async loadWells() {
     try {
       const response = await fetch(`${this.apiBase}/wells/`);
+      if (!response.ok) throw new Error('HTTP error');
+
       const wells = await response.json();
       console.log('Загружено с сервера:', wells.length, 'скважин');
 
@@ -103,11 +98,11 @@ class DrillingJournal {
     } catch (error) {
       console.log('Офлайн режим, загружаем из локальной БД');
       const localWells = await this.loadFromLocalDB('wells');
+      console.log('Найдено локальных скважин:', localWells.length);
       this.renderWells(localWells);
     }
   }
 
-  // СОЗДАНИЕ СКВАЖИНЫ (ОНЛАЙН + ОФФЛАЙН)
   async createWell(formData) {
     const wellData = {
       name: formData.get('name'),
@@ -127,14 +122,12 @@ class DrillingJournal {
 
       if (response.ok) {
         const savedWell = await response.json();
-        // Сохраняем в локальную БД
         await this.saveToLocalDB('wells', savedWell);
         this.showMessage('✅ Скважина создана!', 'success');
         showPage('home-page');
         this.loadWells();
       }
     } catch (error) {
-      // ОФФЛАЙН РЕЖИМ - сохраняем только локально
       console.log('Офлайн режим, сохраняем локально');
       const localWell = await this.saveToLocalDB('wells', {
         ...wellData,
@@ -144,11 +137,10 @@ class DrillingJournal {
 
       this.showMessage('💾 Скважина сохранена локально', 'info');
       showPage('home-page');
-      this.loadWells(); // Перезагружаем список
+      this.loadWells();
     }
   }
 
-  // СОЗДАНИЕ СЛОЯ (ОНЛАЙН + ОФФЛАЙН)
   async createLayer(formData) {
     const wellId = parseInt(formData.get('well_id'));
     const layerData = {
@@ -157,7 +149,7 @@ class DrillingJournal {
       depth_to: parseFloat(formData.get('depth_to')),
       lithology: formData.get('lithology'),
       description: formData.get('description'),
-      layer_number: 1 // Временно
+      layer_number: 1
     };
 
     try {
@@ -171,36 +163,36 @@ class DrillingJournal {
 
       if (response.ok) {
         const savedLayer = await response.json();
-        // Сохраняем в локальную БД
         await this.saveToLocalDB('layers', savedLayer);
         this.showMessage('✅ Слой добавлен!', 'success');
         document.getElementById('new-layer-form').reset();
-        this.loadWellLayers(wellId);
+        await this.loadWellLayers(wellId); // Ждем загрузки
       }
     } catch (error) {
-      // ОФФЛАЙН РЕЖИМ
       console.log('Офлайн режим, сохраняем слой локально');
       const localLayer = await this.saveToLocalDB('layers', {
         ...layerData,
-        wellId: wellId, // Дублируем для локального поиска
+        wellId: wellId,
         created_at: new Date().toISOString(),
-        thickness: layerData.depth_to - layerData.depth_from
+        thickness: (layerData.depth_to - layerData.depth_from).toFixed(2)
       });
 
       this.showMessage('💾 Слой сохранен локально', 'info');
       document.getElementById('new-layer-form').reset();
-      this.loadWellLayers(wellId);
+      await this.loadWellLayers(wellId); // Ждем загрузки
     }
   }
 
-  // ЗАГРУЗКА СЛОЕВ СКВАЖИНЫ (ОНЛАЙН + ОФФЛАЙН)
   async loadWellLayers(wellId) {
+    console.log('Загрузка слоев для скважины:', wellId);
+
     try {
       const response = await fetch(`${this.apiBase}/layers/?well_id=${wellId}`);
+      if (!response.ok) throw new Error('HTTP error');
+
       const layers = await response.json();
       console.log('Загружено слоев с сервера:', layers.length);
 
-      // Сохраняем в локальную БД
       for (const layer of layers) {
         await this.saveToLocalDB('layers', layer);
       }
@@ -209,15 +201,18 @@ class DrillingJournal {
     } catch (error) {
       console.log('Офлайн режим, загружаем слои из локальной БД');
       const allLayers = await this.loadFromLocalDB('layers');
-      const wellLayers = allLayers.filter(layer =>
-        layer.well === wellId || layer.wellId === wellId
-      );
-      console.log('Найдено локальных слоев:', wellLayers.length);
+      console.log('Все локальные слои:', allLayers);
+
+      const wellLayers = allLayers.filter(layer => {
+        const layerWellId = layer.well || layer.wellId || (layer.well && layer.well.id);
+        return layerWellId == wellId;
+      });
+
+      console.log('Найдено локальных слоев для скважины', wellId, ':', wellLayers.length);
       this.renderLayers(wellLayers);
     }
   }
 
-  // ОТОБРАЖЕНИЕ СКВАЖИН (универсальное)
   renderWells(wells) {
     const container = document.getElementById('wells-list');
 
@@ -245,7 +240,6 @@ class DrillingJournal {
         `).join('');
   }
 
-  // ОТОБРАЖЕНИЕ СЛОЕВ (универсальное)  
   renderLayers(layers) {
     const container = document.getElementById('layers-list');
 
@@ -259,6 +253,7 @@ class DrillingJournal {
       return;
     }
 
+    // Сортируем по глубине
     layers.sort((a, b) => parseFloat(a.depth_from) - parseFloat(b.depth_from));
 
     container.innerHTML = layers.map(layer => `
@@ -282,7 +277,6 @@ class DrillingJournal {
         `).join('');
   }
 
-  // ОСТАЛЬНЫЕ МЕТОДЫ остаются без изменений
   calculateThickness(depthFrom, depthTo) {
     if (depthFrom && depthTo) {
       return (parseFloat(depthTo) - parseFloat(depthFrom)).toFixed(2);
@@ -325,12 +319,10 @@ class DrillingJournal {
 
   async syncData() {
     this.showMessage('Синхронизация...', 'info');
-    // Здесь будет логика синхронизации
   }
 
   async exportData() {
     this.showMessage('Экспорт данных...', 'info');
-    // Здесь будет логика экспорта
   }
 
   async showWorkPage(wellId) {
@@ -363,7 +355,6 @@ class DrillingJournal {
   }
 }
 
-// Глобальные функции
 function showPage(pageId) {
   document.querySelectorAll('.page').forEach(page => {
     page.classList.remove('active');
