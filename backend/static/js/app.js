@@ -113,6 +113,8 @@ class DrillingJournal {
       planned_depth: formData.get('planned_depth') || 0
     };
 
+    console.log('Отправляемые данные:', wellData);
+
     try {
       const response = await fetch(`${this.apiBase}/wells/`, {
         method: 'POST',
