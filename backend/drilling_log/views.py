@@ -16,12 +16,15 @@ class WellViewSet(viewsets.ModelViewSet):
 
 
 class GeologyLayerViewSet(viewsets.ModelViewSet):
-    queryset = GeologyLayer.objects.all()
     serializer_class = GeologyLayerSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return GeologyLayer.objects.filter(well__created_by=self.request.user)
+        # Фильтруем по well_id если передан
+        well_id = self.request.query_params.get("well_id")
+        if well_id:
+            return GeologyLayer.objects.filter(well_id=well_id)
+        return GeologyLayer.objects.all()
 
     def perform_create(self, serializer):
         # Автоматически устанавливаем номер слоя
@@ -35,5 +38,4 @@ class GeologyLayerViewSet(viewsets.ModelViewSet):
 
 # View для PWA
 def pwa_app(request):
-    """Главная страница PWA"""
     return render(request, "index.html")

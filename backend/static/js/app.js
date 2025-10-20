@@ -143,7 +143,8 @@ class DrillingJournal {
       depth_from: parseFloat(formData.get('depth_from')),
       depth_to: parseFloat(formData.get('depth_to')),
       lithology: formData.get('lithology'),
-      description: formData.get('description')
+      description: formData.get('description'),
+      layer_number: 1
     };
 
     try {
