@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 5;
+    this.dbVersion = 7;  // Увеличиваем версию
     this.apiBase = '/api';
     this.currentWell = null;
     this.init();
@@ -9,9 +9,34 @@ class DrillingJournal {
 
   async init() {
     await this.initDB();
-    this.setupEventListeners();
+    this.setupEventListeners();  // ← ЭТОТ МЕТОД ДОЛЖЕН БЫТЬ ОПРЕДЕЛЕН
     this.loadWells();
     this.checkConnection();
+  }
+
+  // ДОБАВЛЯЕМ ОТСУТСТВУЮЩИЙ МЕТОД
+  setupEventListeners() {
+    console.log('🔄 Настройка обработчиков событий');
+
+    // Форма создания скважины
+    const wellForm = document.getElementById('new-well-form');
+    if (wellForm) {
+      wellForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.createWell(new FormData(e.target));
+      });
+    }
+
+    // Форма добавления слоя
+    const layerForm = document.getElementById('new-layer-form');
+    if (layerForm) {
+      layerForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.createLayer(new FormData(e.target));
+      });
+    }
+
+    console.log('✅ Обработчики событий настроены');
   }
 
   async initDB() {
@@ -42,6 +67,7 @@ class DrillingJournal {
     });
   }
 
+  // Остальные методы остаются без изменений...
   async saveToLocalDB(storeName, data) {
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([storeName], 'readwrite');
@@ -266,7 +292,6 @@ class DrillingJournal {
     }
   }
 
-  // Остальные методы без изменений
   renderWells(wells) {
     const container = document.getElementById('wells-list');
 
