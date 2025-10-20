@@ -4,78 +4,280 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Буровой Журнал</title>
-    <meta name="theme-color" content="#4f46e5">
+    <meta name="theme-color" content="#2563eb">
     <link rel="manifest" href="/static/manifest.json">
     <style>
-        /* Существующие стили оставляем, добавляем новые */
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 100%;
+            padding: 16px;
+            padding-bottom: 80px;
+        }
+        
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 20px 16px;
+            text-align: center;
+            margin: -16px -16px 20px -16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            width: 100%;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+            background: #1d4ed8;
+        }
+        
+        .btn-secondary {
+            background: #64748b;
+        }
+        
+        .btn-success {
+            background: #10b981;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin: 12px 0;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+        
+        .nav {
+            display: flex;
+            justify-content: space-around;
+            background: white;
+            padding: 12px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .nav-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        
+        .nav-btn:active {
+            background: #f1f5f9;
+        }
+        
+        .page {
+            display: none;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        /* Стили для списка скважин */
+        .wells-grid {
+            display: grid;
+            gap: 12px;
+        }
+        
+        .well-card {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            border-left: 4px solid #2563eb;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        
+        .well-card h3 {
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .well-meta {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        
+        /* Стили для колонки слоев */
+        .layers-column {
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .layers-header {
+            background: #2563eb;
+            color: white;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .layer-item {
+            padding: 16px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+        
+        .layer-item:last-child {
+            border-bottom: none;
+        }
+        
+        .layer-info {
+            flex: 1;
+        }
+        
+        .layer-depth {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        
+        .layer-lithology {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .layer-thickness {
+            background: #f1f5f9;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #475569;
+        }
+        
         .empty-state {
             text-align: center;
             padding: 40px 20px;
-            color: #64748b;
+            color: #94a3b8;
         }
         
-        .message {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #10b981;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        .lithology-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-right: 6px;
         }
         
-        .message-error {
-            background: #ef4444;
+        .prs { background: #dcfce7; color: #166534; }
+        .peat { background: #fef3c7; color: #92400e; }
+        .sand { background: #fef7cd; color: #854d0e; }
+        .loam { background: #e0e7ff; color: #3730a3; }
+        .sandy_loam { background: #fce7f3; color: #be185d; }
+        
+        .connection-status {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
         }
         
-        .message-info {
-            background: #3b82f6;
-        }
+        .online { background: #dcfce7; color: #166534; }
+        .offline { background: #fecaca; color: #dc2626; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📋 Буровой Журнал</h1>
-        <div id="connection-status" class="status-online">🟢 Онлайн</div>
+        <h1>🕳️ Буровой Журнал</h1>
+        <div class="status-bar">
+            <span id="current-well-name">Выберите скважину</span>
+            <span id="connection-status" class="connection-status online">🟢 Онлайн</span>
+        </div>
     </div>
 
     <div class="container">
-        <!-- Главная страница -->
+        <!-- Главная страница - список скважин -->
         <div id="home-page" class="page active">
             <div class="card">
                 <h2>Мои скважины</h2>
-                <div id="wells-list">
+                <div id="wells-list" class="wells-grid">
                     <div class="empty-state">
                         <p>📝 Загрузка скважин...</p>
                     </div>
                 </div>
                 <button class="btn" onclick="showPage('new-well-page')">
-                    ➕ Новая скважина
-                </button>
-            </div>
-            
-            <!-- Статус офлайн данных -->
-            <div class="card" id="offline-data" style="display: none;">
-                <h3>💾 Локальные данные</h3>
-                <p>Эти данные сохранены на устройстве:</p>
-                <div id="offline-wells-list"></div>
-                <button class="btn" onclick="app.syncOfflineData()">
-                    🔄 Синхронизировать при подключении
+                    ➕ Создать новую скважину
                 </button>
             </div>
         </div>
 
-        <!-- Форма создания скважины (уже у вас есть) -->
+        <!-- Создание новой скважины -->
         <div id="new-well-page" class="page">
             <div class="card">
                 <h2>Новая скважина</h2>
                 <form id="new-well-form">
                     <div class="form-group">
                         <label>Название скважины *</label>
-                        <input type="text" name="name" required placeholder="Скважина №1">
+                        <input type="text" name="name" required placeholder="СК-1">
                     </div>
                     
                     <div class="form-group">
@@ -85,47 +287,101 @@
                     
                     <div class="form-group">
                         <label>Сооружение</label>
-                        <input type="text" name="structure" placeholder="Жилой дом">
+                        <input type="text" name="structure" placeholder="Фундамент здания">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">💾 Создать скважину</button>
+                </form>
+                <button class="btn btn-secondary" onclick="showPage('home-page')">
+                    ← Назад к списку
+                </button>
+            </div>
+        </div>
+
+        <!-- Работа со скважиной - основная рабочая зона -->
+        <div id="work-page" class="page">
+            <div class="layers-column">
+                <div class="layers-header">
+                    <h2 id="working-well-name">Скважина</h2>
+                    <p id="working-well-info">Участок</p>
+                </div>
+                
+                <div id="layers-list">
+                    <div class="empty-state">
+                        <p>📝 Нет добавленных слоев</p>
+                        <p><small>Добавьте первый слой</small></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>➕ Добавить новый слой</h3>
+                <form id="new-layer-form">
+                    <input type="hidden" name="well_id" id="current-well-id">
+                    
+                    <div class="form-group">
+                        <label>Глубина от (м) *</label>
+                        <input type="number" step="0.01" name="depth_from" required placeholder="0.00">
                     </div>
                     
                     <div class="form-group">
-                        <label>Проектная глубина (м)</label>
-                        <input type="number" step="0.01" name="planned_depth" placeholder="10.0">
+                        <label>Глубина до (м) *</label>
+                        <input type="number" step="0.01" name="depth_to" required placeholder="1.50">
                     </div>
                     
-                    <button type="submit" class="btn">💾 Сохранить скважину</button>
+                    <div class="form-group">
+                        <label>Тип грунта *</label>
+                        <select name="lithology" required>
+                            <option value="">Выберите литологию</option>
+                            <option value="prs">🟫 ПРС (Поверхностно-растительный слой)</option>
+                            <option value="peat">🟤 Торф</option>
+                            <option value="sand">🟡 Песок</option>
+                            <option value="loam">🔵 Суглинок</option>
+                            <option value="sandy_loam">🟠 Супесь</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Описание (цвет, включения, влажность)</label>
+                        <textarea name="description" placeholder="Серый, пластичный, с включениями..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">💾 Добавить слой</button>
                 </form>
-                <button class="btn btn-secondary" onclick="showPage('home-page')">
-                    ← Назад
-                </button>
+                
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="showPage('home-page')">
+                        ← Назад к списку скважин
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Навигация -->
     <div class="nav">
-        <button class="nav-btn active" onclick="showPage('home-page')">🏠</button>
-        <button class="nav-btn" onclick="showPage('new-well-page')">➕</button>
+        <button class="nav-btn" onclick="showPage('home-page')">🏠</button>
+        <button class="nav-btn" onclick="showPage('new-well-page')">🕳️</button>
         <button class="nav-btn" onclick="app.syncData()">🔄</button>
         <button class="nav-btn" onclick="app.exportData()">📤</button>
     </div>
 
     <script src="/static/js/app.js"></script>
     <script>
+        // Базовые функции навигации
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+        }
+
         // Регистрируем Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/js/sw.js')
                 .then(() => console.log('Service Worker зарегистрирован'))
                 .catch(error => console.log('Ошибка Service Worker:', error));
         }
-        
-        // Проверяем соединение при загрузке
-        window.addEventListener('load', () => {
-            if (!navigator.onLine) {
-                document.getElementById('connection-status').innerHTML = 
-                    '<span class="status-offline">🔴 Офлайн - работаем локально</span>';
-            }
-        });
     </script>
 </body>
 </html>

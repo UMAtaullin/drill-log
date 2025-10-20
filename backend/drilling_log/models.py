@@ -6,10 +6,9 @@ class Well(models.Model):
     """Данные перед бурением - заполняется один раз"""
 
     DRILLING_METHODS = (
-        ("rotary", "Ротационное бурение"),
+        ("core", "Колонковое бурение"),
         ("auger", "Шнековое бурение"),
         ("percussion", "Ударно-канатное бурение"),
-        ("core", "Колонковое бурение"),
     )
 
     # Основные данные
@@ -57,22 +56,17 @@ class Well(models.Model):
 
 
 class GeologyLayer(models.Model):
-    """Слои в процессе бурения - заполняется по мере бурения"""
+    """Слои в процессе бурения"""
 
     LITHOLOGY_TYPES = (
+        ("prs", "ПРС (Поверхностно-растительный слой)"),
+        ("peat", "Торф"),
         ("sand", "Песок"),
-        ("clay", "Глина"),
         ("loam", "Суглинок"),
         ("sandy_loam", "Супесь"),
-        ("peat", "Торф"),
-        ("gravel", "Гравий"),
-        ("boulder", "Валуны"),
-        ("fill", "Насыпной грунт"),
     )
 
-    well = models.ForeignKey(
-        Well, on_delete=models.CASCADE, related_name="layers", verbose_name="Скважина"
-    )
+    well = models.ForeignKey(Well, on_delete=models.CASCADE, related_name="layers")
     layer_number = models.IntegerField(verbose_name="Номер слоя")
     depth_from = models.DecimalField(
         max_digits=6, decimal_places=2, verbose_name="Глубина от, м"
@@ -83,22 +77,12 @@ class GeologyLayer(models.Model):
     lithology = models.CharField(
         max_length=20, choices=LITHOLOGY_TYPES, verbose_name="Литология"
     )
-    description = models.TextField(verbose_name="Описание грунта")
+    description = models.TextField(blank=True, verbose_name="Описание")
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        verbose_name = "Геологический слой"
-        verbose_name_plural = "Геологические слои"
-        ordering = ["well", "depth_from"]
-        unique_together = ["well", "layer_number"]
-
     def thickness(self):
-        """Автоматический расчет мощности слоя"""
         if self.depth_from is not None and self.depth_to is not None:
             return float(self.depth_to) - float(self.depth_from)
         return 0.0
 
     thickness.short_description = "Мощность, м"
-
-    def __str__(self):
-        return f"{self.well.name} - слой {self.layer_number} ({self.depth_from}-{self.depth_to}м)"
