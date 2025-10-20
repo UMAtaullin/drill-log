@@ -1,140 +1,174 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 7;  // Увеличиваем версию
+    this.dbVersion = 8;
     this.apiBase = '/api';
     this.currentWell = null;
+    this.syncInProgress = false;
     this.init();
   }
 
   async init() {
     await this.initDB();
-    this.setupEventListeners();  // ← ЭТОТ МЕТОД ДОЛЖЕН БЫТЬ ОПРЕДЕЛЕН
+    this.setupEventListeners();
     this.loadWells();
     this.checkConnection();
+    this.setupAutoSync();
   }
 
-  // ДОБАВЛЯЕМ ОТСУТСТВУЮЩИЙ МЕТОД
-  setupEventListeners() {
-    console.log('🔄 Настройка обработчиков событий');
-
-    // Форма создания скважины
-    const wellForm = document.getElementById('new-well-form');
-    if (wellForm) {
-      wellForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        this.createWell(new FormData(e.target));
-      });
-    }
-
-    // Форма добавления слоя
-    const layerForm = document.getElementById('new-layer-form');
-    if (layerForm) {
-      layerForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        this.createLayer(new FormData(e.target));
-      });
-    }
-
-    console.log('✅ Обработчики событий настроены');
-  }
-
-  async initDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
-
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        console.log('✅ БД инициализирована');
-        resolve();
-      };
-
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        console.log('🔄 Обновление БД до версии:', event.newVersion);
-
-        if (!db.objectStoreNames.contains('wells')) {
-          const wellStore = db.createObjectStore('wells', { keyPath: 'id' });
-          wellStore.createIndex('name', 'name', { unique: false });
-        }
-
-        if (!db.objectStoreNames.contains('layers')) {
-          const layerStore = db.createObjectStore('layers', { keyPath: 'id' });
-          layerStore.createIndex('wellId', 'wellId', { unique: false });
-        }
-      };
+  // НОВЫЙ МЕТОД - автоматическая синхронизация при появлении интернета
+  setupAutoSync() {
+    window.addEventListener('online', async () => {
+      console.log('🌐 Интернет появился, запускаем синхронизацию...');
+      await this.syncData();
     });
   }
 
-  // Остальные методы остаются без изменений...
-  async saveToLocalDB(storeName, data) {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([storeName], 'readwrite');
-      const store = transaction.objectStore(storeName);
-
-      const itemWithId = {
-        ...data,
-        id: data.id || `local_${Date.now()}`,
-        synced: false,
-        localSaveTime: new Date().toISOString()
-      };
-
-      console.log(`💾 Сохранение в ${storeName}:`, itemWithId.name || itemWithId.id);
-      const request = store.put(itemWithId);
-
-      request.onsuccess = () => resolve(itemWithId);
-      request.onerror = (e) => {
-        console.error(`❌ Ошибка сохранения в ${storeName}:`, e);
-        reject(e);
-      };
-    });
-  }
-
-  async loadFromLocalDB(storeName) {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([storeName], 'readonly');
-      const store = transaction.objectStore(storeName);
-      const request = store.getAll();
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = (e) => {
-        console.error(`❌ Ошибка загрузки из ${storeName}:`, e);
-        reject(e);
-      };
-    });
-  }
-
-  async loadWells() {
-    // ЕСЛИ ОФЛАЙН - СРАЗУ ГРУЗИМ ИЗ ЛОКАЛЬНОЙ БД
-    if (!navigator.onLine) {
-      console.log('📴 Офлайн режим - загружаем скважины из локальной БД');
-      const localWells = await this.loadFromLocalDB('wells');
-      console.log('📂 Найдено локальных скважин:', localWells.length);
-      this.renderWells(localWells);
+  // ОБНОВЛЕННЫЙ МЕТОД - настоящая синхронизация
+  async syncData() {
+    if (this.syncInProgress) {
+      console.log('🔄 Синхронизация уже выполняется');
       return;
     }
 
-    // ЕСЛИ ОНЛАЙН - пробуем загрузить с сервера
+    this.syncInProgress = true;
+    this.showMessage('🔄 Синхронизация данных...', 'info');
+
     try {
-      const response = await fetch(`${this.apiBase}/wells/`);
-      if (!response.ok) throw new Error('HTTP error');
+      // СИНХРОНИЗАЦИЯ СКВАЖИН
+      const localWells = await this.loadFromLocalDB('wells');
+      const unsyncedWells = localWells.filter(well => !well.synced && well.id.toString().startsWith('local_'));
 
-      const wells = await response.json();
-      console.log('✅ Загружено с сервера:', wells.length, 'скважин');
-
-      for (const well of wells) {
-        await this.saveToLocalDB('wells', well);
+      for (const well of unsyncedWells) {
+        await this.syncWell(well);
       }
 
-      this.renderWells(wells);
+      // СИНХРОНИЗАЦИЯ СЛОЕВ
+      const localLayers = await this.loadFromLocalDB('layers');
+      const unsyncedLayers = localLayers.filter(layer => !layer.synced && layer.id.toString().startsWith('local_'));
+
+      for (const layer of unsyncedLayers) {
+        await this.syncLayer(layer);
+      }
+
+      // ПЕРЕЗАГРУЖАЕМ ДАННЫЕ С СЕРВЕРА
+      await this.loadWells();
+      if (this.currentWell) {
+        await this.loadWellLayers(this.currentWell);
+      }
+
+      this.showMessage('✅ Синхронизация завершена!', 'success');
+
     } catch (error) {
-      console.log('❌ Ошибка загрузки скважин, используем локальные данные');
-      const localWells = await this.loadFromLocalDB('wells');
-      this.renderWells(localWells);
+      console.error('❌ Ошибка синхронизации:', error);
+      this.showMessage('❌ Ошибка синхронизации', 'error');
+    } finally {
+      this.syncInProgress = false;
     }
   }
 
+  // СИНХРОНИЗАЦИЯ СКВАЖИНЫ
+  async syncWell(localWell) {
+    try {
+      const wellData = {
+        name: localWell.name,
+        area: localWell.area,
+        structure: localWell.structure,
+        planned_depth: localWell.planned_depth
+      };
+
+      const response = await fetch(`${this.apiBase}/wells/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wellData)
+      });
+
+      if (response.ok) {
+        const serverWell = await response.json();
+
+        // ОБНОВЛЯЕМ ЛОКАЛЬНУЮ ЗАПИСЬ
+        await this.saveToLocalDB('wells', {
+          ...serverWell,
+          synced: true
+        });
+
+        console.log('✅ Скважина синхронизирована:', serverWell.name);
+
+        // ОБНОВЛЯЕМ СЛОИ ЭТОЙ СКВАЖИНЫ
+        await this.updateLayersWellId(localWell.id, serverWell.id);
+
+      }
+    } catch (error) {
+      console.error('❌ Ошибка синхронизации скважины:', localWell.name, error);
+      throw error;
+    }
+  }
+
+  // СИНХРОНИЗАЦИЯ СЛОЯ
+  async syncLayer(localLayer) {
+    try {
+      // Получаем актуальный wellId (может измениться после синхронизации скважины)
+      const wells = await this.loadFromLocalDB('wells');
+      const originalWell = wells.find(w => w.id === localLayer.originalWellId || w.id === localLayer.wellId);
+      const actualWellId = originalWell?.synced ? originalWell.id : localLayer.well;
+
+      const layerData = {
+        well: actualWellId,
+        depth_from: localLayer.depth_from,
+        depth_to: localLayer.depth_to,
+        lithology: localLayer.lithology,
+        description: localLayer.description,
+        layer_number: localLayer.layer_number
+      };
+
+      const response = await fetch(`${this.apiBase}/layers/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(layerData)
+      });
+
+      if (response.ok) {
+        const serverLayer = await response.json();
+
+        // ОБНОВЛЯЕМ ЛОКАЛЬНУЮ ЗАПИСЬ
+        await this.saveToLocalDB('layers', {
+          ...serverLayer,
+          wellId: serverLayer.well,
+          synced: true
+        });
+
+        console.log('✅ Слой синхронизирован:', serverLayer.id);
+      }
+    } catch (error) {
+      console.error('❌ Ошибка синхронизации слоя:', localLayer.id, error);
+      throw error;
+    }
+  }
+
+  // ОБНОВЛЯЕМ wellId В СЛОЯХ ПОСЛЕ СИНХРОНИЗАЦИИ СКВАЖИНЫ
+  async updateLayersWellId(oldWellId, newWellId) {
+    const allLayers = await this.loadFromLocalDB('layers');
+    const layersToUpdate = allLayers.filter(layer =>
+      (layer.well === oldWellId || layer.wellId === oldWellId) && !layer.synced
+    );
+
+    for (const layer of layersToUpdate) {
+      await this.saveToLocalDB('layers', {
+        ...layer,
+        well: newWellId,
+        wellId: newWellId,
+        originalWellId: oldWellId // сохраняем старый ID для отслеживания
+      });
+    }
+
+    console.log(`🔄 Обновлено ${layersToUpdate.length} слоев для новой скважины ${newWellId}`);
+  }
+
+  // ОБНОВЛЕННЫЙ МЕТОД СОХРАНЕНИЯ СКВАЖИНЫ ОФФЛАЙН
   async createWell(formData) {
     const wellData = {
       name: formData.get('name'),
@@ -156,7 +190,10 @@ class DrillingJournal {
 
         if (response.ok) {
           const savedWell = await response.json();
-          await this.saveToLocalDB('wells', savedWell);
+          await this.saveToLocalDB('wells', {
+            ...savedWell,
+            synced: true
+          });
           this.showMessage('✅ Скважина создана!', 'success');
           showPage('home-page');
           this.loadWells();
@@ -182,6 +219,7 @@ class DrillingJournal {
     this.loadWells();
   }
 
+  // ОБНОВЛЕННЫЙ МЕТОД СОХРАНЕНИЯ СЛОЯ ОФФЛАЙН
   async createLayer(formData) {
     const wellId = parseInt(formData.get('well_id'));
     const depthFrom = parseFloat(formData.get('depth_from'));
@@ -214,7 +252,8 @@ class DrillingJournal {
           const savedLayer = await response.json();
           await this.saveToLocalDB('layers', {
             ...savedLayer,
-            wellId: wellId
+            wellId: savedLayer.well,
+            synced: true
           });
           this.showMessage('✅ Слой добавлен!', 'success');
           document.getElementById('new-layer-form').reset();
@@ -231,6 +270,7 @@ class DrillingJournal {
     await this.saveLayerOffline(layerData, wellId);
   }
 
+  // ОБНОВЛЕННЫЙ МЕТОД СОХРАНЕНИЯ СЛОЯ ОФФЛАЙН
   async saveLayerOffline(layerData, wellId) {
     const localLayer = await this.saveToLocalDB('layers', {
       ...layerData,
@@ -247,18 +287,7 @@ class DrillingJournal {
     await this.updateLayersUI(wellId);
   }
 
-  async updateLayersUI(wellId) {
-    console.log('🔄 Обновление интерфейса для скважины:', wellId);
-
-    const allLayers = await this.loadFromLocalDB('layers');
-    const wellLayers = allLayers.filter(layer => {
-      return layer.well === wellId || layer.wellId === wellId;
-    });
-
-    console.log(`🎯 Отображаем ${wellLayers.length} слоев`);
-    this.renderLayers(wellLayers);
-  }
-
+  // ОБНОВЛЕННЫЙ МЕТОД ЗАГРУЗКИ СЛОЕВ - показываем и синхронизированные и несинхронизированные
   async loadWellLayers(wellId) {
     console.log('🔄 Загрузка слоев для скважины:', wellId);
 
@@ -274,17 +303,28 @@ class DrillingJournal {
       const response = await fetch(`${this.apiBase}/layers/?well_id=${wellId}`);
       if (!response.ok) throw new Error('HTTP error');
 
-      const layers = await response.json();
-      console.log('✅ Загружено слоев с сервера:', layers.length);
+      const serverLayers = await response.json();
+      console.log('✅ Загружено слоев с сервера:', serverLayers.length);
 
-      for (const layer of layers) {
+      // Сохраняем серверные слои
+      for (const layer of serverLayers) {
         await this.saveToLocalDB('layers', {
           ...layer,
-          wellId: wellId
+          wellId: layer.well,
+          synced: true
         });
       }
 
-      this.renderLayers(layers);
+      // ДОБАВЛЯЕМ ЛОКАЛЬНЫЕ НЕСИНХРОНИЗИРОВАННЫЕ СЛОИ
+      const allLocalLayers = await this.loadFromLocalDB('layers');
+      const localUnsyncedLayers = allLocalLayers.filter(layer =>
+        (layer.well === wellId || layer.wellId === wellId) && !layer.synced
+      );
+
+      const allLayers = [...serverLayers, ...localUnsyncedLayers];
+      console.log(`🎯 Всего слоев: ${allLayers.length} (${serverLayers.length} с сервера + ${localUnsyncedLayers.length} локальных)`);
+
+      this.renderLayers(allLayers);
 
     } catch (error) {
       console.log('❌ Ошибка загрузки с сервера, используем локальные данные');
@@ -433,6 +473,7 @@ class DrillingJournal {
   }
 }
 
+// Глобальные функции
 function showPage(pageId) {
   document.querySelectorAll('.page').forEach(page => {
     page.classList.remove('active');
