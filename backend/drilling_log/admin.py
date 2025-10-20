@@ -7,14 +7,15 @@ class GeologyLayerInline(admin.TabularInline):
 
     model = GeologyLayer
     extra = 1
+    fields = (
+        "layer_number",
+        "depth_from",
+        "depth_to",
+        "lithology",
+        "description",
+        "thickness",
+    )
     readonly_fields = ("thickness",)
-
-    def thickness(self, obj):
-        if obj.pk:  # Только для сохраненных объектов
-            return f"{obj.thickness()} м"
-        return "—"
-
-    thickness.short_description = "Мощность"
 
 
 @admin.register(Well)
@@ -23,31 +24,19 @@ class WellAdmin(admin.ModelAdmin):
         "name",
         "area",
         "structure",
-        "start_date",
         "planned_depth",
         "created_by",
+        "created_at",
     )
-    list_filter = ("area", "drilling_method", "start_date")
+    list_filter = ("area", "created_at")
     search_fields = ("name", "area", "structure")
     readonly_fields = ("created_at", "updated_at")
     inlines = [GeologyLayerInline]
 
     fieldsets = (
-        ("Основные данные", {"fields": ("name", "area", "structure")}),
-        ("Даты", {"fields": ("start_date", "end_date")}),
         (
-            "Технические параметры",
-            {
-                "fields": (
-                    "planned_depth",
-                    "latitude",
-                    "longitude",
-                    "drilling_method",
-                    "drilling_rig",
-                    "vehicle",
-                    "diameter",
-                )
-            },
+            "Основные данные",
+            {"fields": ("name", "area", "structure", "planned_depth", "start_date")},
         ),
         (
             "Системная информация",
@@ -68,8 +57,9 @@ class GeologyLayerAdmin(admin.ModelAdmin):
         "depth_to",
         "lithology",
         "thickness_display",
+        "created_at",
     )
-    list_filter = ("lithology", "well")
+    list_filter = ("lithology", "well", "created_at")
     search_fields = ("well__name", "description")
     readonly_fields = ("thickness_display", "created_at")
 

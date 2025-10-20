@@ -9,15 +9,18 @@ from .serializers import WellSerializer, GeologyLayerSerializer
 class WellViewSet(viewsets.ModelViewSet):
     queryset = Well.objects.all().select_related("created_by")
     serializer_class = WellSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # Временно для тестирования
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        # Берем первого пользователя, так как аутентификация отключена
+        first_user = User.objects.first()
+        serializer.save(created_by=first_user)
 
 
 class GeologyLayerViewSet(viewsets.ModelViewSet):
+    queryset = GeologyLayer.objects.all()
     serializer_class = GeologyLayerSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # Временно для тестирования
 
     def get_queryset(self):
         # Фильтруем по well_id если передан

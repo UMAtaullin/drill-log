@@ -15,6 +15,9 @@ class Well(models.Model):
     planned_depth = models.DecimalField(
         max_digits=6, decimal_places=2, default=0, verbose_name="Проектная глубина, м"
     )
+    start_date = models.DateField(
+        null=True, blank=True, verbose_name="Дата начала бурения"
+    )
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, verbose_name="Создал"
     )
@@ -44,6 +47,7 @@ class GeologyLayer(models.Model):
     well = models.ForeignKey(
         Well, on_delete=models.CASCADE, related_name="layers", verbose_name="Скважина"
     )
+    layer_number = models.IntegerField(default=1, verbose_name="Номер слоя")
     depth_from = models.DecimalField(
         max_digits=6, decimal_places=2, verbose_name="Глубина от, м"
     )
