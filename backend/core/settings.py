@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+import time
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -36,14 +38,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Временно разрешаем доступ без аутентификации
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",  # Временно!
     ],
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
 }
 
 # CORS настройки для мобильного доступа
@@ -120,7 +119,7 @@ USE_I18N = True
 USE_TZ = True
 
 # Добавляем STATIC_ROOT
-STATIC_URL = "/static/"
+STATIC_URL = f"/static/?v={int(time.time())}"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # Папка для collectstatic
 
 # STATICFILES_DIRS для разработки
