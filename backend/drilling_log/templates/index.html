@@ -366,7 +366,7 @@
         <button class="nav-btn" onclick="app.exportData()">📤</button>
     </div>
 
-    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/app.js?v=9"></script>
     <script>
         // Базовые функции навигации
         function showPage(pageId) {
@@ -382,6 +382,45 @@
                 .then(() => console.log('Service Worker зарегистрирован'))
                 .catch(error => console.log('Ошибка Service Worker:', error));
         }
+    </script>
+    <!-- Toast уведомления -->
+    <div id="toast" class="toast" style="display: none;"></div>
+
+    <style>
+    .toast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        font-size: 14px;
+        max-width: 300px;
+        text-align: center;
+    }
+
+    .toast.success { background: #10b981; }
+    .toast.info { background: #3b82f6; }
+    .toast.warning { background: #f59e0b; }
+    .toast.error { background: #ef4444; }
+    </style>
+
+    <script>
+    // Функция для показа toast уведомлений
+    function showToast(message, type = 'info', duration = 3000) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = `toast ${type}`;
+        toast.style.display = 'block';
+        
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, duration);
+    }
     </script>
 </body>
 </html>

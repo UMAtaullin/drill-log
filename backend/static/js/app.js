@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 8;
+    this.dbVersion = 9;
     this.apiBase = '/api';
     this.currentWell = null;
     this.syncInProgress = false;
@@ -97,6 +97,24 @@ class DrillingJournal {
       request.onsuccess = () => resolve(itemWithId);
       request.onerror = (e) => {
         console.error(`❌ Ошибка сохранения в ${storeName}:`, e);
+        reject(e);
+      };
+    });
+  }
+
+  // МЕТОД УДАЛЕНИЯ ИЗ ЛОКАЛЬНОЙ БД
+  async deleteFromLocalDB(storeName, id) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.delete(id);
+
+      request.onsuccess = () => {
+        console.log(`🗑️ Удален из ${storeName}:`, id);
+        resolve();
+      };
+      request.onerror = (e) => {
+        console.error(`❌ Ошибка удаления из ${storeName}:`, e);
         reject(e);
       };
     });
@@ -413,7 +431,7 @@ class DrillingJournal {
   // МЕТОД СИНХРОНИЗАЦИИ СЛОЯ
   async syncLayer(localLayer) {
     try {
-      // Получаем актуальный wellId (может измениться после синхронизации скважины)
+      // Получаем актуальный wellId
       const wells = await this.loadFromLocalDB('wells');
       const originalWell = wells.find(w => w.id === localLayer.originalWellId || w.id === localLayer.wellId);
       const actualWellId = originalWell?.synced ? originalWell.id : localLayer.well;
@@ -438,14 +456,17 @@ class DrillingJournal {
       if (response.ok) {
         const serverLayer = await response.json();
 
-        // ОБНОВЛЯЕМ ЛОКАЛЬНУЮ ЗАПИСЬ
+        // УДАЛЯЕМ СТАРЫЙ ЛОКАЛЬНЫЙ СЛОЙ ПЕРЕД СОХРАНЕНИЕМ НОВОГО
+        await this.deleteFromLocalDB('layers', localLayer.id);
+
+        // СОХРАНЯЕМ НОВЫЙ СИНХРОНИЗИРОВАННЫЙ СЛОЙ
         await this.saveToLocalDB('layers', {
           ...serverLayer,
           wellId: serverLayer.well,
           synced: true
         });
 
-        console.log('✅ Слой синхронизирован:', serverLayer.id);
+        console.log('✅ Слой синхронизирован и заменен:', localLayer.id, '→', serverLayer.id);
       }
     } catch (error) {
       console.error('❌ Ошибка синхронизации слоя:', localLayer.id, error);
@@ -578,7 +599,12 @@ class DrillingJournal {
 
   // МЕТОД ПОКАЗА СООБЩЕНИЙ
   showMessage(text, type = 'info') {
-    alert(text);
+    if (typeof showToast === 'function') {
+      showToast(text, type);
+    } else {
+      // Fallback на alert если toast не доступен
+      console.log(`${type.toUpperCase()}: ${text}`);
+    }
   }
 
   // МЕТОД ЭКСПОРТА ДАННЫХ
