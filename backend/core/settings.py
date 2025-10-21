@@ -119,7 +119,7 @@ USE_I18N = True
 USE_TZ = True
 
 # Добавляем STATIC_ROOT
-STATIC_URL = f"/static/?v={int(time.time())}"
+STATIC_URL = f"/static/?v={int(time.time())}/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # Папка для collectstatic
 
 # STATICFILES_DIRS для разработки
