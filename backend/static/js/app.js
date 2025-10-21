@@ -6,8 +6,6 @@ class DrillingJournal {
     this.currentWell = null;
     this.syncInProgress = false;
     this.manualOfflineMode = false;
-    this.geologistName = this.getGeologistName(); // Получаем имя геолога
-    this.showOnlyMyWells = false; // Флаг фильтрации
     this.init();
   }
 
@@ -19,37 +17,6 @@ class DrillingJournal {
     this.setupAutoSync();
     this.setupManualOfflineToggle();
   }
-
-  // МЕТОД ПОЛУЧЕНИЯ ИМЕНИ ГЕОЛОГА
-  getGeologistName() {
-    let name = localStorage.getItem('geologist_name');
-    if (!name) {
-      name = prompt('👤 Введите ваше имя для работы с буровым журналом:') || 'Неизвестный геолог';
-      localStorage.setItem('geologist_name', name);
-    }
-    return name;
-  }
-
-  // МЕТОД СМЕНЫ ИМЕНИ ГЕОЛОГА
-  changeGeologistName() {
-    const newName = prompt('👤 Введите новое имя:', this.geologistName);
-    if (newName && newName.trim()) {
-      this.geologistName = newName.trim();
-      localStorage.setItem('geologist_name', this.geologistName);
-      this.updateUserInterface();
-      this.showMessage(`👤 Имя изменено на: ${this.geologistName}`, 'success');
-      this.loadWells(); // Перезагружаем скважины
-    }
-  }
-
-  // МЕТОД ОБНОВЛЕНИЯ ИНТЕРФЕЙСА ПОЛЬЗОВАТЕЛЯ
-  updateUserInterface() {
-    const userNameElement = document.getElementById('user-name');
-    if (userNameElement) {
-      userNameElement.textContent = `👤 ${this.geologistName}`;
-    }
-  }
-
 
   // НОВЫЙ МЕТОД - настройка ручного переключения офлайн
   setupManualOfflineToggle() {
@@ -204,29 +171,24 @@ class DrillingJournal {
     });
   }
 
-  // ОБНОВЛЯЕМ ЗАГРУЗКУ СКВАЖИН С ФИЛЬТРАЦИЕЙ
+  // МЕТОД ЗАГРУЗКИ СКВАЖИН
   async loadWells() {
-    if (!navigator.onLine) {
+    // ЕСЛИ ОФЛАЙН - СРАЗУ ГРУЗИМ ИЗ ЛОКАЛЬНОЙ БД
+    if (!this.isOnline()) {
       console.log('📴 Офлайн режим - загружаем скважины из локальной БД');
       const localWells = await this.loadFromLocalDB('wells');
-      const filteredWells = this.showOnlyMyWells
-        ? localWells.filter(well => well.geologist === this.geologistName)
-        : localWells;
-      console.log('📂 Найдено скважин:', filteredWells.length);
-      this.renderWells(filteredWells);
+      console.log('📂 Найдено локальных скважин:', localWells.length);
+      this.renderWells(localWells);
       return;
     }
 
+    // ЕСЛИ ОНЛАЙН - пробуем загрузить с сервера
     try {
       const response = await fetch(`${this.apiBase}/wells/`);
       if (!response.ok) throw new Error('HTTP error');
 
       const wells = await response.json();
-      const filteredWells = this.showOnlyMyWells
-        ? wells.filter(well => well.geologist === this.geologistName)
-        : wells;
-
-      console.log('✅ Загружено с сервера:', filteredWells.length, 'скважин');
+      console.log('✅ Загружено с сервера:', wells.length, 'скважин');
 
       for (const well of wells) {
         await this.saveToLocalDB('wells', {
@@ -235,14 +197,11 @@ class DrillingJournal {
         });
       }
 
-      this.renderWells(filteredWells);
+      this.renderWells(wells);
     } catch (error) {
       console.log('❌ Ошибка загрузки скважин, используем локальные данные');
       const localWells = await this.loadFromLocalDB('wells');
-      const filteredWells = this.showOnlyMyWells
-        ? localWells.filter(well => well.geologist === this.geologistName)
-        : localWells;
-      this.renderWells(filteredWells);
+      this.renderWells(localWells);
     }
   }
 
@@ -252,8 +211,7 @@ class DrillingJournal {
       name: formData.get('name'),
       area: formData.get('area'),
       structure: formData.get('structure'),
-      planned_depth: parseFloat(formData.get('planned_depth')) || 0,
-      geologist: this.geologistName // Автоматически подставляем имя
+      planned_depth: parseFloat(formData.get('planned_depth')) || 0
     };
     console.log('🔍 Создание скважины с проектной глубиной:', wellData.planned_depth);
 
@@ -298,34 +256,6 @@ class DrillingJournal {
     showPage('home-page');
     this.loadWells();
   }
-
-  // МЕТОД ПОКАЗА ВСЕХ СКВАЖИН
-  async showAllWells() {
-    this.showOnlyMyWells = false;
-    await this.loadWells();
-    this.updateFilterButtons();
-    this.showMessage('📋 Показаны все скважины', 'info');
-  }
-
-  // МЕТОД ПОКАЗА ТОЛЬКО СВОИХ СКВАЖИН
-  async showMyWells() {
-    this.showOnlyMyWells = true;
-    await this.loadWells();
-    this.updateFilterButtons();
-    this.showMessage(`👤 Показаны скважины геолога: ${this.geologistName}`, 'info');
-  }
-
-  // МЕТОД ОБНОВЛЕНИЯ КНОПОК ФИЛЬТРА
-  updateFilterButtons() {
-    const allBtn = document.getElementById('show-all-btn');
-    const myBtn = document.getElementById('show-my-btn');
-
-    if (allBtn && myBtn) {
-      allBtn.classList.toggle('active', !this.showOnlyMyWells);
-      myBtn.classList.toggle('active', this.showOnlyMyWells);
-    }
-  }
-
 
   // МЕТОД СОЗДАНИЯ СЛОЯ - С ОТЛАДКОЙ
   async createLayer(formData) {

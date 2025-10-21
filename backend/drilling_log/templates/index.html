@@ -8,7 +8,7 @@
     <link rel="manifest" href="/static/manifest.json" />
     <style>
       * {
-        margin: 0 1px 0 1px;
+        margin: 2px;
         padding: 0;
         box-sizing: border-box;
       }
@@ -22,14 +22,14 @@
 
       .container {
         max-width: 100%;
-        padding: 14px;
+        padding: 16px;
         padding-bottom: 80px;
       }
 
       .header {
         background: #2563eb;
         color: white;
-        padding: 18px 15px;
+        padding: 20px 16px;
         text-align: center;
         margin: -16px -16px 20px -16px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -165,39 +165,6 @@
         color: #64748b;
         font-size: 14px;
         margin-bottom: 12px;
-      }
-      .user-controls {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-      }
-
-      .filter-buttons {
-        display: flex;
-        gap: 4px;
-      }
-
-      .filter-btn,
-      .user-btn {
-        background: none;
-        border: 1px solid #64748b;
-        border-radius: 6px;
-        padding: 4px 8px;
-        cursor: pointer;
-        font-size: 12px;
-        transition: all 0.2s;
-      }
-
-      .filter-btn:hover,
-      .user-btn:hover {
-        background: #f1f5f9;
-      }
-
-      .filter-btn.active {
-        background: #3b82f6;
-        color: white;
-        border-color: #3b82f6;
       }
 
       /* Стили для колонки слоев */
@@ -339,28 +306,6 @@
       <h1>Буровой Журнал</h1>
       <div class="status-bar">
         <span id="current-well-name">Выберите скважину</span>
-        <div class="user-controls">
-          <span id="user-name">👤 Загрузка...</span>
-          <div class="filter-buttons">
-            <button
-              id="show-all-btn"
-              class="filter-btn active"
-              onclick="app.showAllWells()"
-            >
-              Все
-            </button>
-            <button
-              id="show-my-btn"
-              class="filter-btn"
-              onclick="app.showMyWells()"
-            >
-              Мои
-            </button>
-            <button class="user-btn" onclick="app.changeGeologistName()">
-              ✏️
-            </button>
-          </div>
-        </div>
         <div class="connection-controls">
           <span id="connection-status" class="connection-status online"
             >🟢 Онлайн</span
@@ -370,7 +315,7 @@
             class="offline-toggle"
             title="Переключить режим офлайн"
           >
-            ON/OFF
+            📴
           </button>
         </div>
       </div>
@@ -399,12 +344,7 @@
           <form id="new-well-form">
             <div class="form-group">
               <label>Название скважины *</label>
-              <input
-                type="text"
-                name="name"
-                required
-                placeholder="Номер скважины"
-              />
+              <input type="text" name="name" required placeholder="Номер скважины" />
             </div>
 
             <div class="form-group">
