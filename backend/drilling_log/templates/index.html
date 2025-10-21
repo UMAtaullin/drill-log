@@ -227,6 +227,30 @@
             font-weight: 500;
             margin-right: 6px;
         }
+        .connection-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        }
+
+        .offline-toggle {
+        background: none;
+        border: 1px solid #64748b;
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+        }
+
+        .offline-toggle:hover {
+        background: #f1f5f9;
+        }
+
+        .offline-toggle.offline {
+            background: #fecaca;
+            border-color: #ef4444;
+        }
         
         .prs { background: #dcfce7; color: #166534; }
         .peat { background: #fef3c7; color: #92400e; }
@@ -250,7 +274,12 @@
         <h1>🕳️ Буровой Журнал</h1>
         <div class="status-bar">
             <span id="current-well-name">Выберите скважину</span>
-            <span id="connection-status" class="connection-status online">🟢 Онлайн</span>
+            <div class="connection-controls">
+                <span id="connection-status" class="connection-status online">🟢 Онлайн</span>
+                <button id="toggle-offline" class="offline-toggle" title="Переключить режим офлайн">
+                    📴
+                </button>
+            </div>
         </div>
     </div>
 
@@ -366,7 +395,7 @@
         <button class="nav-btn" onclick="app.exportData()">📤</button>
     </div>
 
-    <script src="/static/js/app.js?v=10"></script>
+    <script src="/static/js/app.js?v=11"></script>
     <script>
         // Базовые функции навигации
         function showPage(pageId) {

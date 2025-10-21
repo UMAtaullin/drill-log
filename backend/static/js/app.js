@@ -1,10 +1,11 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 10;
+    this.dbVersion = 11;
     this.apiBase = '/api';
     this.currentWell = null;
     this.syncInProgress = false;
+    this.manualOfflineMode = false;
     this.init();
   }
 
@@ -14,6 +15,41 @@ class DrillingJournal {
     this.loadWells();
     this.checkConnection();
     this.setupAutoSync();
+    this.setupManualOfflineToggle();
+  }
+
+  // НОВЫЙ МЕТОД - настройка ручного переключения офлайн
+  setupManualOfflineToggle() {
+    const toggleBtn = document.getElementById('toggle-offline');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        this.toggleManualOfflineMode();
+      });
+    }
+  }
+
+  // НОВЫЙ МЕТОД - переключение ручного офлайн режима
+  toggleManualOfflineMode() {
+    this.manualOfflineMode = !this.manualOfflineMode;
+    const toggleBtn = document.getElementById('toggle-offline');
+    const statusElement = document.getElementById('connection-status');
+
+    if (this.manualOfflineMode) {
+      // Включаем ручной офлайн режим
+      toggleBtn.classList.add('offline');
+      toggleBtn.title = 'Переключить в онлайн режим';
+      statusElement.textContent = '🔴 Ручной офлайн';
+      statusElement.className = 'connection-status offline';
+      this.showMessage('📴 Включен ручной офлайн режим', 'info');
+    } else {
+      // Выключаем ручной офлайн режим
+      toggleBtn.classList.remove('offline');
+      toggleBtn.title = 'Переключить в офлайн режим';
+      this.updateConnectionStatus(); // Восстанавливаем реальный статус
+      this.showMessage('🌐 Включен онлайн режим', 'info');
+    }
+
+    console.log('🔧 Ручной режим офлайн:', this.manualOfflineMode);
   }
 
   // МЕТОД ИНИЦИАЛИЗАЦИИ БАЗЫ ДАННЫХ
@@ -138,7 +174,7 @@ class DrillingJournal {
   // МЕТОД ЗАГРУЗКИ СКВАЖИН
   async loadWells() {
     // ЕСЛИ ОФЛАЙН - СРАЗУ ГРУЗИМ ИЗ ЛОКАЛЬНОЙ БД
-    if (!navigator.onLine) {
+    if (!this.isOnline()) {
       console.log('📴 Офлайн режим - загружаем скважины из локальной БД');
       const localWells = await this.loadFromLocalDB('wells');
       console.log('📂 Найдено локальных скважин:', localWells.length);
@@ -220,11 +256,16 @@ class DrillingJournal {
     this.loadWells();
   }
 
-  // МЕТОД СОЗДАНИЯ СЛОЯ
+  // МЕТОД СОЗДАНИЯ СЛОЯ - С ОТЛАДКОЙ
   async createLayer(formData) {
-    const wellId = parseInt(formData.get('well_id'));
+    const wellIdInput = formData.get('well_id');
+    console.log('🔍 DEBUG createLayer - wellId from form:', wellIdInput, 'type:', typeof wellIdInput);
+
+    const wellId = wellIdInput.toString(); // Всегда работаем со строкой
     const depthFrom = parseFloat(formData.get('depth_from'));
     const depthTo = parseFloat(formData.get('depth_to'));
+
+    console.log('🔍 DEBUG - parsed wellId:', wellId, 'depthFrom:', depthFrom, 'depthTo:', depthTo);
 
     const layerData = {
       well: wellId,
@@ -237,16 +278,25 @@ class DrillingJournal {
       thickness: (depthTo - depthFrom).toFixed(2)
     };
 
-    // ПРОВЕРЯЕМ ОНЛАЙН СТАТУС
+    console.log('🔍 DEBUG - layerData:', layerData);
+
     if (navigator.onLine) {
       console.log('🌐 Онлайн режим - отправляем на сервер');
       try {
+        // Для онлайн-режима отправляем wellId как число (если это не локальная скважина)
+        const sendData = {
+          ...layerData,
+          well: wellId.startsWith('local_') ? null : parseInt(wellId) // Сервер ожидает число или null
+        };
+
+        console.log('🔍 DEBUG - sending to server:', sendData);
+
         const response = await fetch(`${this.apiBase}/layers/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(layerData)
+          body: JSON.stringify(sendData)
         });
 
         if (response.ok) {
@@ -311,7 +361,7 @@ class DrillingJournal {
     const wellIdStr = wellId.toString();
     console.log('🔄 Загрузка слоев для скважины:', wellIdStr);
 
-    if (!navigator.onLine) {
+    if (!this.isOnline()) {
       console.log('📴 Офлайн режим - загружаем только из локальной БД');
       await this.updateLayersUI(wellIdStr);
       return;
@@ -582,23 +632,41 @@ class DrillingJournal {
     return lithologyMap[lithology] || lithology;
   }
 
-  // МЕТОД ПРОВЕРКИ СОЕДИНЕНИЯ
+  // ОБНОВЛЕННЫЙ МЕТОД - проверка соединения с учетом ручного режима
   checkConnection() {
     const statusElement = document.getElementById('connection-status');
 
     const updateStatus = () => {
-      if (navigator.onLine) {
-        statusElement.textContent = '🟢 Онлайн';
-        statusElement.className = 'connection-status online';
-      } else {
-        statusElement.textContent = '🔴 Офлайн';
+      if (this.manualOfflineMode) {
+        // Ручной офлайн режим принудительно
+        statusElement.textContent = '🔴 Ручной офлайн';
         statusElement.className = 'connection-status offline';
+      } else {
+        // Реальный статус соединения
+        this.updateConnectionStatus();
       }
     };
 
     updateStatus();
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
+  }
+
+  // НОВЫЙ МЕТОД - обновление статуса соединения
+  updateConnectionStatus() {
+    const statusElement = document.getElementById('connection-status');
+    if (navigator.onLine) {
+      statusElement.textContent = '🟢 Онлайн';
+      statusElement.className = 'connection-status online';
+    } else {
+      statusElement.textContent = '🔴 Офлайн';
+      statusElement.className = 'connection-status offline';
+    }
+  }
+
+  // ОБНОВЛЕННЫЙ МЕТОД - проверка онлайн статуса с учетом ручного режима
+  isOnline() {
+    return !this.manualOfflineMode && navigator.onLine;
   }
 
   // МЕТОД ПОКАЗА СООБЩЕНИЙ
@@ -629,13 +697,12 @@ class DrillingJournal {
     showPage('work-page');
   }
 
-  // МЕТОД ЗАГРУЗКИ ДЕТАЛЕЙ СКВАЖИНЫ
+  // МЕТОД ЗАГРУЗКИ ДЕТАЛЕЙ СКВАЖИНЫ - ОБНОВЛЕННЫЙ
   async loadWellDetails(wellId) {
-    // ПРЕОБРАЗУЕМ ID К СТРОКЕ ДЛЯ СРАВНЕНИЯ
     const wellIdStr = wellId.toString();
 
-    // ЕСЛИ СКВАЖИНА С СЕРВЕРА (числовой ID) - загружаем с сервера
-    if (!isNaN(wellIdStr) && navigator.onLine) {
+    // Заменяем проверку на this.isOnline()
+    if (!wellIdStr.startsWith('local_') && !isNaN(wellIdStr) && this.isOnline()) {
       try {
         const response = await fetch(`${this.apiBase}/wells/${wellIdStr}/`);
         const well = await response.json();
