@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 14;
+    this.dbVersion = 12;
     this.apiBase = '/api';
     this.currentWell = null;
     this.syncInProgress = false;
@@ -213,7 +213,6 @@ class DrillingJournal {
       structure: formData.get('structure'),
       planned_depth: parseFloat(formData.get('planned_depth')) || 0
     };
-    console.log('🔍 Создание скважины с проектной глубиной:', wellData.planned_depth);
 
     // ПРОВЕРЯЕМ ОНЛАЙН СТАТУС
     if (navigator.onLine) {
@@ -568,7 +567,7 @@ class DrillingJournal {
             <div class="well-meta">
                 <p>📍 ${well.area}</p>
                 ${well.structure ? `<p>🏗️ ${well.structure}</p>` : ''}
-                <p>📏 Проектная глубина: ${well.planned_depth} м</p>
+                ${well.planned_depth ? `<p>📏 ${well.planned_depth} м</p>` : ''}
                 ${!well.synced ? '<p><small>💾 Локальная версия</small></p>' : ''}
             </div>
             <small>📅 ${new Date(well.created_at || well.localSaveTime).toLocaleDateString('ru-RU')}</small>
@@ -709,11 +708,7 @@ class DrillingJournal {
         const well = await response.json();
 
         document.getElementById('working-well-name').textContent = well.name;
-        document.getElementById('working-well-info').innerHTML = `
-                <p><strong>Участок:</strong> ${well.area}</p>
-                ${well.structure ? `<p><strong>Сооружение:</strong> ${well.structure}</p>` : ''}
-                <p><strong>Проектная глубина:</strong> ${well.planned_depth} м</p>
-            `;
+        document.getElementById('working-well-info').textContent = `${well.area} • ${well.structure || ''}`;
         document.getElementById('current-well-name').textContent = well.name;
         return;
       } catch (error) {
@@ -728,11 +723,7 @@ class DrillingJournal {
 
     if (well) {
       document.getElementById('working-well-name').textContent = well.name;
-      document.getElementById('working-well-info').innerHTML = `
-            <p><strong>Участок:</strong> ${well.area}</p>
-            ${well.structure ? `<p><strong>Сооружение:</strong> ${well.structure}</p>` : ''}
-            <p><strong>Проектная глубина:</strong> ${well.planned_depth} м</p>
-        `;
+      document.getElementById('working-well-info').textContent = `${well.area} • ${well.structure || ''}`;
       document.getElementById('current-well-name').textContent = well.name;
       console.log('✅ Локальная скважина найдена:', well.name);
     } else {
