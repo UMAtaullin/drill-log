@@ -18,6 +18,9 @@ class Well(models.Model):
     start_date = models.DateField(
         null=True, blank=True, verbose_name="Дата начала бурения"
     )
+    geologist = models.CharField(
+        max_length=100, verbose_name="Геолог", default="Неизвестный геолог"
+    )
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, verbose_name="Создал"
     )

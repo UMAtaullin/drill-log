@@ -6,6 +6,7 @@ class DrillingJournal {
     this.currentWell = null;
     this.syncInProgress = false;
     this.manualOfflineMode = false;
+    this.geologistName = this.getGeologistName(); // Получаем имя геолога
     this.init();
   }
 
@@ -17,6 +18,21 @@ class DrillingJournal {
     this.setupAutoSync();
     this.setupManualOfflineToggle();
   }
+
+  // МЕТОД ПОЛУЧЕНИЯ ИМЕНИ ГЕОЛОГА
+  getGeologistName() {
+    let name = localStorage.getItem('geologist_name');
+    if (!name) {
+      name = prompt('👤 Введите ваше имя для работы с журналом:');
+      if (name) {
+        localStorage.setItem('geologist_name', name);
+      } else {
+        name = 'Неизвестный геолог';
+      }
+    }
+    return name;
+  }
+
 
   // НОВЫЙ МЕТОД - настройка ручного переключения офлайн
   setupManualOfflineToggle() {
@@ -211,7 +227,8 @@ class DrillingJournal {
       name: formData.get('name'),
       area: formData.get('area'),
       structure: formData.get('structure'),
-      planned_depth: parseFloat(formData.get('planned_depth')) || 0
+      planned_depth: parseFloat(formData.get('planned_depth')) || 0,
+      geologist: this.geologistName // Автоматически подставляем имя
     };
     console.log('🔍 Создание скважины с проектной глубиной:', wellData.planned_depth);
 
