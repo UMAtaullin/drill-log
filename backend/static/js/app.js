@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 9;
+    this.dbVersion = 10;
     this.apiBase = '/api';
     this.currentWell = null;
     this.syncInProgress = false;
@@ -288,39 +288,42 @@ class DrillingJournal {
     await this.updateLayersUI(wellId);
   }
 
-  // МЕТОД ОБНОВЛЕНИЯ ИНТЕРФЕЙСА СЛОЕВ
+  // МЕТОД ОБНОВЛЕНИЯ ИНТЕРФЕЙСА СЛОЕВ - ИСПРАВЛЕННЫЙ
   async updateLayersUI(wellId) {
     console.log('🔄 Обновление интерфейса для скважины:', wellId);
 
     const allLayers = await this.loadFromLocalDB('layers');
     const wellLayers = allLayers.filter(layer => {
-      return layer.well === wellId || layer.wellId === wellId;
+      // ПРЕОБРАЗУЕМ ВСЕ ID К СТРОКАМ ДЛЯ СРАВНЕНИЯ
+      const layerWellId = layer.well ? layer.well.toString() : null;
+      const layerWellIdAlt = layer.wellId ? layer.wellId.toString() : null;
+      const targetWellId = wellId.toString();
+
+      return layerWellId === targetWellId || layerWellIdAlt === targetWellId;
     });
 
-    console.log(`🎯 Отображаем ${wellLayers.length} слоев`);
+    console.log(`🎯 Отображаем ${wellLayers.length} слоев для скважины ${wellId}`);
     this.renderLayers(wellLayers);
   }
 
   // МЕТОД ЗАГРУЗКИ СЛОЕВ СКВАЖИНЫ
   async loadWellLayers(wellId) {
-    console.log('🔄 Загрузка слоев для скважины:', wellId);
+    const wellIdStr = wellId.toString();
+    console.log('🔄 Загрузка слоев для скважины:', wellIdStr);
 
-    // ЕСЛИ ОФЛАЙН - СРАЗУ ГРУЗИМ ИЗ ЛОКАЛЬНОЙ БД
     if (!navigator.onLine) {
       console.log('📴 Офлайн режим - загружаем только из локальной БД');
-      await this.updateLayersUI(wellId);
+      await this.updateLayersUI(wellIdStr);
       return;
     }
 
-    // ЕСЛИ ОНЛАЙН - пробуем загрузить с сервера
     try {
-      const response = await fetch(`${this.apiBase}/layers/?well_id=${wellId}`);
+      const response = await fetch(`${this.apiBase}/layers/?well_id=${wellIdStr}`);
       if (!response.ok) throw new Error('HTTP error');
 
       const serverLayers = await response.json();
       console.log('✅ Загружено слоев с сервера:', serverLayers.length);
 
-      // Сохраняем серверные слои
       for (const layer of serverLayers) {
         await this.saveToLocalDB('layers', {
           ...layer,
@@ -329,11 +332,12 @@ class DrillingJournal {
         });
       }
 
-      // ДОБАВЛЯЕМ ЛОКАЛЬНЫЕ НЕСИНХРОНИЗИРОВАННЫЕ СЛОИ
       const allLocalLayers = await this.loadFromLocalDB('layers');
-      const localUnsyncedLayers = allLocalLayers.filter(layer =>
-        (layer.well === wellId || layer.wellId === wellId) && !layer.synced
-      );
+      const localUnsyncedLayers = allLocalLayers.filter(layer => {
+        const layerWellId = layer.well ? layer.well.toString() : null;
+        const layerWellIdAlt = layer.wellId ? layer.wellId.toString() : null;
+        return (layerWellId === wellIdStr || layerWellIdAlt === wellIdStr) && !layer.synced;
+      });
 
       const allLayers = [...serverLayers, ...localUnsyncedLayers];
       console.log(`🎯 Всего слоев: ${allLayers.length} (${serverLayers.length} с сервера + ${localUnsyncedLayers.length} локальных)`);
@@ -342,7 +346,7 @@ class DrillingJournal {
 
     } catch (error) {
       console.log('❌ Ошибка загрузки с сервера, используем локальные данные');
-      await this.updateLayersUI(wellId);
+      await this.updateLayersUI(wellIdStr);
     }
   }
 
@@ -499,26 +503,26 @@ class DrillingJournal {
 
     if (!wells || wells.length === 0) {
       container.innerHTML = `
-                <div class="empty-state">
-                    <p>📝 Нет созданных скважин</p>
-                    <p><small>Создайте первую скважину</small></p>
-                </div>
-            `;
+            <div class="empty-state">
+                <p>📝 Нет созданных скважин</p>
+                <p><small>Создайте первую скважину</small></p>
+            </div>
+        `;
       return;
     }
 
     container.innerHTML = wells.map(well => `
-            <div class="well-card" onclick="app.showWorkPage(${well.id})">
-                <h3>${well.name}</h3>
-                <div class="well-meta">
-                    <p>📍 ${well.area}</p>
-                    ${well.structure ? `<p>🏗️ ${well.structure}</p>` : ''}
-                    ${well.planned_depth ? `<p>📏 ${well.planned_depth} м</p>` : ''}
-                    ${!well.synced ? '<p><small>💾 Локальная версия</small></p>' : ''}
-                </div>
-                <small>📅 ${new Date(well.created_at || well.localSaveTime).toLocaleDateString('ru-RU')}</small>
+        <div class="well-card" onclick="app.showWorkPage('${well.id}')">
+            <h3>${well.name}</h3>
+            <div class="well-meta">
+                <p>📍 ${well.area}</p>
+                ${well.structure ? `<p>🏗️ ${well.structure}</p>` : ''}
+                ${well.planned_depth ? `<p>📏 ${well.planned_depth} м</p>` : ''}
+                ${!well.synced ? '<p><small>💾 Локальная версия</small></p>' : ''}
             </div>
-        `).join('');
+            <small>📅 ${new Date(well.created_at || well.localSaveTime).toLocaleDateString('ru-RU')}</small>
+        </div>
+    `).join('');
   }
 
   // МЕТОД ОТОБРАЖЕНИЯ СЛОЕВ
@@ -615,31 +619,49 @@ class DrillingJournal {
   // МЕТОД ПЕРЕХОДА НА СТРАНИЦУ РАБОТЫ СО СКВАЖИНОЙ
   async showWorkPage(wellId) {
     this.currentWell = wellId;
-    document.getElementById('current-well-id').value = wellId;
-    await this.loadWellDetails(wellId);
-    await this.loadWellLayers(wellId);
+
+    // УБЕЖДАЕМСЯ ЧТО wellId - СТРОКА ДЛЯ СРАВНЕНИЯ
+    const wellIdStr = wellId.toString();
+    document.getElementById('current-well-id').value = wellIdStr;
+
+    await this.loadWellDetails(wellIdStr);
+    await this.loadWellLayers(wellIdStr);
     showPage('work-page');
   }
 
   // МЕТОД ЗАГРУЗКИ ДЕТАЛЕЙ СКВАЖИНЫ
   async loadWellDetails(wellId) {
-    try {
-      const response = await fetch(`${this.apiBase}/wells/${wellId}/`);
-      const well = await response.json();
+    // ПРЕОБРАЗУЕМ ID К СТРОКЕ ДЛЯ СРАВНЕНИЯ
+    const wellIdStr = wellId.toString();
 
-      document.getElementById('working-well-name').textContent = well.name;
-      document.getElementById('working-well-info').textContent = `${well.area} • ${well.structure || ''}`;
-      document.getElementById('current-well-name').textContent = well.name;
+    // ЕСЛИ СКВАЖИНА С СЕРВЕРА (числовой ID) - загружаем с сервера
+    if (!isNaN(wellIdStr) && navigator.onLine) {
+      try {
+        const response = await fetch(`${this.apiBase}/wells/${wellIdStr}/`);
+        const well = await response.json();
 
-    } catch (error) {
-      console.log('Ошибка загрузки деталей скважины, пробуем локально');
-      const localWells = await this.loadFromLocalDB('wells');
-      const well = localWells.find(w => w.id == wellId);
-      if (well) {
         document.getElementById('working-well-name').textContent = well.name;
         document.getElementById('working-well-info').textContent = `${well.area} • ${well.structure || ''}`;
         document.getElementById('current-well-name').textContent = well.name;
+        return;
+      } catch (error) {
+        console.log('❌ Ошибка загрузки с сервера, пробуем локально');
       }
+    }
+
+    // ДЛЯ ЛОКАЛЬНЫХ СКВАЖИН ИЛИ ПРИ ОШИБКЕ - ИЩЕМ В ЛОКАЛЬНОЙ БД
+    console.log('🔍 Ищем скважину в локальной БД:', wellIdStr);
+    const localWells = await this.loadFromLocalDB('wells');
+    const well = localWells.find(w => w.id.toString() === wellIdStr);
+
+    if (well) {
+      document.getElementById('working-well-name').textContent = well.name;
+      document.getElementById('working-well-info').textContent = `${well.area} • ${well.structure || ''}`;
+      document.getElementById('current-well-name').textContent = well.name;
+      console.log('✅ Локальная скважина найдена:', well.name);
+    } else {
+      console.error('❌ Скважина не найдена:', wellIdStr);
+      this.showMessage('❌ Скважина не найдена', 'error');
     }
   }
 }
