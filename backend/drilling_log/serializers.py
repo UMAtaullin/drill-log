@@ -33,7 +33,8 @@ class WellSerializer(serializers.ModelSerializer):
         model = Well
         fields = "__all__"
         extra_kwargs = {
-            "planned_depth": {"required": False, "allow_null": True},
+            "planned_depth": {"required": True},
+            "geologist": {"required": True},
             "structure": {"required": False, "allow_blank": True},
             "start_date": {"required": False, "allow_null": True},
         }

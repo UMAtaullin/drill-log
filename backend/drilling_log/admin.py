@@ -25,6 +25,7 @@ class WellAdmin(admin.ModelAdmin):
         "area",
         "structure",
         "planned_depth",
+        "geologist",
         "created_by",
         "created_at",
     )
@@ -36,7 +37,16 @@ class WellAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "Основные данные",
-            {"fields": ("name", "area", "structure", "planned_depth", "start_date")},
+            {
+                "fields": (
+                    "name",
+                    "area",
+                    "structure",
+                    "planned_depth",
+                    "geologist",
+                    "start_date",
+                )
+            },
         ),
         (
             "Системная информация",
