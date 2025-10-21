@@ -1,7 +1,7 @@
 class DrillingJournal {
   constructor() {
     this.dbName = 'DrillingJournal';
-    this.dbVersion = 11;
+    this.dbVersion = 12;
     this.apiBase = '/api';
     this.currentWell = null;
     this.syncInProgress = false;
@@ -731,6 +731,146 @@ class DrillingJournal {
       this.showMessage('❌ Скважина не найдена', 'error');
     }
   }
+  // МЕТОД ЭКСПОРТА В EXCEL
+  async exportToExcel() {
+    try {
+      this.showMessage('📊 Подготовка данных для экспорта...', 'info');
+
+      // Получаем все скважины и слои
+      const wells = await this.loadFromLocalDB('wells');
+      const layers = await this.loadFromLocalDB('layers');
+
+      if (wells.length === 0) {
+        this.showMessage('❌ Нет данных для экспорта', 'error');
+        return;
+      }
+
+      // Создаем Excel файл
+      const workbook = this.createExcelWorkbook(wells, layers);
+
+      // Сохраняем и скачиваем
+      this.downloadExcel(workbook, 'буровой_журнал.xlsx');
+
+      this.showMessage('✅ Файл успешно экспортирован!', 'success');
+
+    } catch (error) {
+      console.error('❌ Ошибка экспорта:', error);
+      this.showMessage('❌ Ошибка при экспорте данных', 'error');
+    }
+  }
+
+  // МЕТОД СОЗДАНИЯ EXCEL ФАЙЛА
+  createExcelWorkbook(wells, layers) {
+    // Создаем рабочую книгу
+    const workbook = XLSX.utils.book_new();
+
+    // Лист со скважинами
+    const wellsData = this.prepareWellsData(wells);
+    const wellsSheet = XLSX.utils.json_to_sheet(wellsData);
+    XLSX.utils.book_append_sheet(workbook, wellsSheet, 'Скважины');
+
+    // Лист со слоями
+    const layersData = this.prepareLayersData(layers, wells);
+    const layersSheet = XLSX.utils.json_to_sheet(layersData);
+    XLSX.utils.book_append_sheet(workbook, layersSheet, 'Геологические слои');
+
+    // Сводный лист
+    const summaryData = this.prepareSummaryData(wells, layers);
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Сводка');
+
+    return workbook;
+  }
+
+  // ПОДГОТОВКА ДАННЫХ СКВАЖИН
+  prepareWellsData(wells) {
+    return wells.map(well => ({
+      'ID скважины': well.id,
+      'Название': well.name,
+      'Участок': well.area,
+      'Сооружение': well.structure || '',
+      'Проектная глубина, м': well.planned_depth || 0,
+      'Дата создания': new Date(well.created_at || well.localSaveTime).toLocaleDateString('ru-RU'),
+      'Статус': well.synced ? 'Синхронизировано' : 'Локальная версия'
+    }));
+  }
+
+  // ПОДГОТОВКА ДАННЫХ СЛОЕВ
+  prepareLayersData(layers, wells) {
+    // Создаем карту скважин для быстрого поиска
+    const wellMap = {};
+    wells.forEach(well => {
+      wellMap[well.id] = well.name;
+    });
+
+    return layers.map(layer => ({
+      'ID слоя': layer.id,
+      'Скважина': wellMap[layer.well] || wellMap[layer.wellId] || 'Неизвестно',
+      'Номер слоя': layer.layer_number || 1,
+      'Глубина от, м': layer.depth_from,
+      'Глубина до, м': layer.depth_to,
+      'Мощность, м': layer.thickness || (layer.depth_to - layer.depth_from).toFixed(2),
+      'Литология': this.getLithologyDisplay(layer.lithology),
+      'Описание': layer.description || '',
+      'Дата создания': new Date(layer.created_at || layer.localSaveTime).toLocaleDateString('ru-RU'),
+      'Статус': layer.synced ? 'Синхронизировано' : 'Локальная версия'
+    }));
+  }
+
+  // ПОДГОТОВКА СВОДНЫХ ДАННЫХ
+  prepareSummaryData(wells, layers) {
+    const summary = wells.map(well => {
+      const wellLayers = layers.filter(layer =>
+        layer.well === well.id || layer.wellId === well.id
+      );
+
+      const totalDepth = wellLayers.length > 0
+        ? Math.max(...wellLayers.map(l => parseFloat(l.depth_to)))
+        : 0;
+
+      return {
+        'Скважина': well.name,
+        'Участок': well.area,
+        'Количество слоев': wellLayers.length,
+        'Общая глубина, м': totalDepth,
+        'Проектная глубина, м': well.planned_depth || 0,
+        'ПРС': wellLayers.filter(l => l.lithology === 'prs').length,
+        'Торф': wellLayers.filter(l => l.lithology === 'peat').length,
+        'Песок': wellLayers.filter(l => l.lithology === 'sand').length,
+        'Суглинок': wellLayers.filter(l => l.lithology === 'loam').length,
+        'Супесь': wellLayers.filter(l => l.lithology === 'sandy_loam').length
+      };
+    });
+
+    return summary;
+  }
+
+  // МЕТОД СКАЧИВАНИЯ EXCEL ФАЙЛА
+  downloadExcel(workbook, filename) {
+    // Конвертируем в бинарный формат
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: 'xlsx',
+      type: 'array'
+    });
+
+    // Создаем Blob и ссылку для скачивания
+    const blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+  // ОБНОВЛЕННЫЙ МЕТОД ЭКСПОРТА ДАННЫХ
+  async exportData() {
+    await this.exportToExcel();
+  }
 }
 
 // ГЛОБАЛЬНЫЕ ФУНКЦИИ
@@ -754,3 +894,4 @@ let app;
 document.addEventListener('DOMContentLoaded', () => {
   app = new DrillingJournal();
 });
+

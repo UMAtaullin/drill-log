@@ -8,7 +8,7 @@
     <link rel="manifest" href="/static/manifest.json">
     <style>
         * { 
-            margin: 0; 
+            margin: 5px; 
             padding: 0; 
             box-sizing: border-box; 
         }
@@ -267,6 +267,13 @@
         
         .online { background: #dcfce7; color: #166534; }
         .offline { background: #fecaca; color: #dc2626; }
+        .nav-btn.export {
+        background: #10b981;
+        color: white;
+        }
+        .nav-btn.export:active {
+            background: #0da271;
+        }
     </style>
 </head>
 <body>
@@ -392,10 +399,11 @@
         <button class="nav-btn" onclick="showPage('home-page')">🏠</button>
         <button class="nav-btn" onclick="showPage('new-well-page')">🕳️</button>
         <button class="nav-btn" onclick="app.syncData()">🔄</button>
-        <button class="nav-btn" onclick="app.exportData()">📤</button>
+        <button class="nav-btn" onclick="app.exportToExcel()">📤 Excel</button>
     </div>
-
-    <script src="/static/js/app.js?v=11"></script>
+    <!-- Библиотека для работы с Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="/static/js/app.js?v=12"></script>
     <script>
         // Базовые функции навигации
         function showPage(pageId) {
